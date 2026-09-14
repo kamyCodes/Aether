@@ -1,38 +1,65 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isFreeModel, isRoutingAlias, isChatCapable, getSelectableModels, enrichModel } from '../server/modelCatalog.js';
-import { classifyTask, pickModelForTask, CATEGORY_PREFERENCES, DEFAULT_FALLBACK } from '../server/router.js';
+import {
+  isFreeModel,
+  isRoutingAlias,
+  isChatCapable,
+  getSelectableModels,
+  enrichModel,
+} from '../server/modelCatalog.js';
+import {
+  classifyTask,
+  pickModelForTask,
+  CATEGORY_PREFERENCES,
+  DEFAULT_FALLBACK,
+} from '../server/router.js';
 import { maskKey } from '../server/omni.js';
 
 // ---- Fixtures: entries shaped like the real OmniRoute /v1/models response ----
 
 const FIXTURES = [
-  { id: 'auto/best-free', object: 'model', owned_by: 'combo' },                        // meta-alias
-  { id: 'auto/coding:free', object: 'model', owned_by: 'combo' },                      // coding alias (free)
-  { id: 'auto/chat', object: 'model', owned_by: 'combo' },                             // chat alias
-  { id: 'auto/vision', object: 'model', owned_by: 'combo' },                           // vision alias
-  { id: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free', object: 'model', owned_by: 'openrouter' }, // :free suffix
-  { id: 'felo/felo-chat', object: 'model', owned_by: 'felo-web' },                     // free provider
-  { id: 'ddgw/gpt-5.4-mini', object: 'model', owned_by: 'duckduckgo-web' },            // free provider
+  { id: 'auto/best-free', object: 'model', owned_by: 'combo' }, // meta-alias
+  { id: 'auto/coding:free', object: 'model', owned_by: 'combo' }, // coding alias (free)
+  { id: 'auto/chat', object: 'model', owned_by: 'combo' }, // chat alias
+  { id: 'auto/vision', object: 'model', owned_by: 'combo' }, // vision alias
+  {
+    id: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
+    object: 'model',
+    owned_by: 'openrouter',
+  }, // :free suffix
+  { id: 'felo/felo-chat', object: 'model', owned_by: 'felo-web' }, // free provider
+  { id: 'ddgw/gpt-5.4-mini', object: 'model', owned_by: 'duckduckgo-web' }, // free provider
   { id: 'tllm/GPT_5_4', object: 'model', owned_by: 'theoldllm', name: 'GPT 5.4 \u{1F193}' }, // 🆓 marker
-  { id: 'veoaifree/veo-3', object: 'model', owned_by: 'veoaifree-web' },               // free provider
-  { id: 'g4f/llama-3', object: 'model', owned_by: 'g4f-pollinations' },                // free provider
-  { id: 'aug/sonnet4.6', object: 'model', owned_by: 'augment' },                       // paid/unknown
-  { id: 'openrouter/openai/gpt-5-mini', object: 'model', owned_by: 'openrouter' },     // paid/unknown
-  { id: 'text-embedding-3', object: 'model', type: 'embedding', owned_by: 'openai' },  // excluded modality
-  { id: 'whisper-large', object: 'model', type: 'audio', owned_by: 'openai' },         // excluded modality
-  { id: 'rerank-v2', object: 'model', type: 'rerank', owned_by: 'cohere' },            // excluded modality
+  { id: 'veoaifree/veo-3', object: 'model', owned_by: 'veoaifree-web' }, // free provider
+  { id: 'g4f/llama-3', object: 'model', owned_by: 'g4f-pollinations' }, // free provider
+  { id: 'aug/sonnet4.6', object: 'model', owned_by: 'augment' }, // paid/unknown
+  { id: 'openrouter/openai/gpt-5-mini', object: 'model', owned_by: 'openrouter' }, // paid/unknown
+  { id: 'text-embedding-3', object: 'model', type: 'embedding', owned_by: 'openai' }, // excluded modality
+  { id: 'whisper-large', object: 'model', type: 'audio', owned_by: 'openai' }, // excluded modality
+  { id: 'rerank-v2', object: 'model', type: 'rerank', owned_by: 'cohere' }, // excluded modality
 ];
 
 // ---------- isFreeModel ----------
 
 test('isFreeModel: id ending in :free is free', () => {
-  assert.equal(isFreeModel({ id: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free', owned_by: 'openrouter' }), true);
+  assert.equal(
+    isFreeModel({
+      id: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
+      owned_by: 'openrouter',
+    }),
+    true,
+  );
   assert.equal(isFreeModel({ id: 'auto/coding:free', owned_by: 'openrouter' }), true);
 });
 
 test('isFreeModel: known always-free providers are free', () => {
-  for (const owned_by of ['g4f-pollinations', 'felo-web', 'duckduckgo-web', 'theoldllm', 'veoaifree-web']) {
+  for (const owned_by of [
+    'g4f-pollinations',
+    'felo-web',
+    'duckduckgo-web',
+    'theoldllm',
+    'veoaifree-web',
+  ]) {
     assert.equal(isFreeModel({ id: `x/${owned_by}-model`, owned_by }), true, owned_by);
   }
 });
@@ -99,19 +126,32 @@ test('enrichModel: flags free and routingAlias correctly', () => {
 // ---------- classifyTask ----------
 
 test('classifyTask: errors/debugging language wins', () => {
-  assert.equal(classifyTask({ prompt: 'fix the TypeError crash on startup' }).category, 'debugging');
+  assert.equal(
+    classifyTask({ prompt: 'fix the TypeError crash on startup' }).category,
+    'debugging',
+  );
 });
 
 test('classifyTask: test files/vocabulary → testing', () => {
-  assert.equal(classifyTask({ prompt: 'add coverage for parser', files: ['src/__tests__/util.test.ts'] }).category, 'testing');
+  assert.equal(
+    classifyTask({ prompt: 'add coverage for parser', files: ['src/__tests__/util.test.ts'] })
+      .category,
+    'testing',
+  );
 });
 
 test('classifyTask: image attachment → vision', () => {
-  assert.equal(classifyTask({ prompt: 'what is in this screenshot', hasImage: true }).category, 'vision');
+  assert.equal(
+    classifyTask({ prompt: 'what is in this screenshot', hasImage: true }).category,
+    'vision',
+  );
 });
 
 test('classifyTask: plan mode / planning vocabulary → planning', () => {
-  assert.equal(classifyTask({ prompt: '[PLAN] restructure the modules', mode: 'plan' }).category, 'planning');
+  assert.equal(
+    classifyTask({ prompt: '[PLAN] restructure the modules', mode: 'plan' }).category,
+    'planning',
+  );
 });
 
 test('classifyTask: ask mode → chat', () => {
@@ -151,7 +191,10 @@ test('pickModelForTask: guaranteed fallback even with empty selectable set', () 
 
 test('category preference lists all end with the guaranteed fallback', () => {
   for (const [, prefs] of Object.entries(CATEGORY_PREFERENCES)) {
-    assert.ok(prefs.includes('auto/best-free'), `preferences for ${String(prefs)} must include the fallback`);
+    assert.ok(
+      prefs.includes('auto/best-free'),
+      `preferences for ${String(prefs)} must include the fallback`,
+    );
   }
 });
 

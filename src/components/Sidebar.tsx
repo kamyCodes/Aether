@@ -1,5 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, GitBranch, ChevronRight, ChevronDown, Folder, FilePlus, FolderPlus, Pencil, Trash2, Copy } from 'lucide-react';
+import {
+  Search,
+  GitBranch,
+  ChevronRight,
+  ChevronDown,
+  Folder,
+  FilePlus,
+  FolderPlus,
+  Pencil,
+  Trash2,
+  Copy,
+} from 'lucide-react';
 import { TechIcon } from './TechIcon';
 import { GlassSegmentedControl, GlassButton } from './glass';
 import { techNameForFile } from '../lib/techIconMap';
@@ -10,7 +21,11 @@ import { ContextMenu } from './ContextMenu';
 import type { ContextMenuItem } from './ContextMenu';
 import type { FileNode } from '../../shared/types';
 
-interface MenuState { x: number; y: number; items: ContextMenuItem[] }
+interface MenuState {
+  x: number;
+  y: number;
+  items: ContextMenuItem[];
+}
 
 export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const tree = useStore((s) => s.tree);
@@ -44,11 +59,19 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
   }, [gitStatuses]);
 
   const newFileIn = async (dir?: string) => {
-    const name = await promptDialog({ title: dir ? `New file in ${dir}` : 'New file in workspace root', placeholder: 'file name (e.g. index.ts or src/app.tsx)', confirmLabel: 'Create' });
+    const name = await promptDialog({
+      title: dir ? `New file in ${dir}` : 'New file in workspace root',
+      placeholder: 'file name (e.g. index.ts or src/app.tsx)',
+      confirmLabel: 'Create',
+    });
     if (name?.trim()) await createFile(dir ? `${dir}/${name.trim()}` : name.trim());
   };
   const newFolderIn = async (dir?: string) => {
-    const name = await promptDialog({ title: dir ? `New folder in ${dir}` : 'New folder in workspace root', placeholder: 'folder name', confirmLabel: 'Create' });
+    const name = await promptDialog({
+      title: dir ? `New folder in ${dir}` : 'New folder in workspace root',
+      placeholder: 'folder name',
+      confirmLabel: 'Create',
+    });
     if (name?.trim()) await createFolder(dir ? `${dir}/${name.trim()}` : name.trim());
   };
 
@@ -59,8 +82,16 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
       x: e.clientX,
       y: e.clientY,
       items: [
-        { label: 'New File…', icon: <FilePlus size={12} />, onSelect: () => void newFileIn(undefined) },
-        { label: 'New Folder…', icon: <FolderPlus size={12} />, onSelect: () => void newFolderIn(undefined) },
+        {
+          label: 'New File…',
+          icon: <FilePlus size={12} />,
+          onSelect: () => void newFileIn(undefined),
+        },
+        {
+          label: 'New Folder…',
+          icon: <FolderPlus size={12} />,
+          onSelect: () => void newFolderIn(undefined),
+        },
       ],
     });
   };
@@ -96,61 +127,140 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
       <div
         className={`panel-body ${rootDragOver ? 'drop-target' : ''}`}
         onContextMenu={view === 'explorer' && tree ? openRootMenu : undefined}
-        onDragOver={(e) => { if (view === 'explorer' && e.dataTransfer.types.includes('text/aether-path')) { e.preventDefault(); setRootDragOver(true); } }}
-        onDragLeave={(e) => { if (e.target === e.currentTarget) setRootDragOver(false); }}
+        onDragOver={(e) => {
+          if (view === 'explorer' && e.dataTransfer.types.includes('text/aether-path')) {
+            e.preventDefault();
+            setRootDragOver(true);
+          }
+        }}
+        onDragLeave={(e) => {
+          if (e.target === e.currentTarget) setRootDragOver(false);
+        }}
         onDrop={(e) => void onRootDrop(e)}
       >
         {view === 'ws' ? (
           <div>
             {workspaces.map((w) => (
-              <div key={w.id} className={`tree-item ${w.id === workspaceId ? 'active' : ''}`} onClick={() => void selectWorkspace(w.id)}>
+              <div
+                key={w.id}
+                className={`tree-item ${w.id === workspaceId ? 'active' : ''}`}
+                onClick={() => void selectWorkspace(w.id)}
+              >
                 <Folder size={12} className="icon-run" /> {w.name}
-                {w.git && <span className="badge" style={{ marginLeft: 'auto' }}>git</span>}
+                {w.git && (
+                  <span className="badge" style={{ marginLeft: 'auto' }}>
+                    git
+                  </span>
+                )}
               </div>
             ))}
             <div style={{ padding: 10 }}>
-              <button className="primary" style={{ width: '100%' }}                onClick={async () => {
-                  const root = await promptDialog({ title: 'Add workspace folder', placeholder: 'Absolute folder path…', folderPicker: true, confirmLabel: 'Add' });
+              <button
+                className="primary"
+                style={{ width: '100%' }}
+                onClick={async () => {
+                  const root = await promptDialog({
+                    title: 'Add workspace folder',
+                    placeholder: 'Absolute folder path…',
+                    folderPicker: true,
+                    confirmLabel: 'Add',
+                  });
                   if (root) await addWorkspace(root);
-                }}>+ Add Workspace Folder</button>
+                }}
+              >
+                + Add Workspace Folder
+              </button>
             </div>
           </div>
         ) : tree ? (
           <>
             <div className="tree-actions">
-              <button title="New file in root" onClick={() => void newFileIn(undefined)}><FilePlus size={12} /></button>
-              <button title="New folder in root" onClick={() => void newFolderIn(undefined)}><FolderPlus size={12} /></button>
+              <button title="New file in root" onClick={() => void newFileIn(undefined)}>
+                <FilePlus size={12} />
+              </button>
+              <button title="New folder in root" onClick={() => void newFolderIn(undefined)}>
+                <FolderPlus size={12} />
+              </button>
             </div>
             {tree.type === 'dir' && (!tree.children || tree.children.length === 0) ? (
               <div className="empty-state">
                 <div>This folder is empty</div>
-                <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{tree.path === '' || !tree.path ? workspaceName : tree.path}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>
+                  {tree.path === '' || !tree.path ? workspaceName : tree.path}
+                </div>
               </div>
             ) : (
-              <Tree node={tree} depth={0} setMenu={setMenu} statuses={gitStatuses} dirtyDirs={dirtyDirs} />
+              <Tree
+                node={tree}
+                depth={0}
+                setMenu={setMenu}
+                statuses={gitStatuses}
+                dirtyDirs={dirtyDirs}
+              />
             )}
           </>
         ) : (
           <div className="empty-state">
             <div>No workspace</div>
-            <button className="primary" onClick={async () => {
-              const root = await promptDialog({ title: 'Add workspace folder', placeholder: 'Absolute folder path…', folderPicker: true, confirmLabel: 'Add' });
-              if (root) await addWorkspace(root);
-            }}>Add Folder</button>
+            <button
+              className="primary"
+              onClick={async () => {
+                const root = await promptDialog({
+                  title: 'Add workspace folder',
+                  placeholder: 'Absolute folder path…',
+                  folderPicker: true,
+                  confirmLabel: 'Add',
+                });
+                if (root) await addWorkspace(root);
+              }}
+            >
+              Add Folder
+            </button>
           </div>
         )}
       </div>
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />
+      )}
       {/* Liquid Glass footer actions */}
-      <div style={{ padding: '6px 10px', borderTop: '1px solid var(--border)', display: 'flex', gap: 6 }}>
-        <GlassButton className="btn-glass glass sidebar-action" onClick={() => openTab({ kind: 'search', title: 'Search' })}><Search size={12} /> Search</GlassButton>
-        <GlassButton className="btn-glass glass sidebar-action" onClick={() => openTab({ kind: 'git', title: 'Git' })}><GitBranch size={12} /> Git</GlassButton>
+      <div
+        style={{
+          padding: '6px 10px',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          gap: 6,
+        }}
+      >
+        <GlassButton
+          className="btn-glass glass sidebar-action"
+          onClick={() => openTab({ kind: 'search', title: 'Search' })}
+        >
+          <Search size={12} /> Search
+        </GlassButton>
+        <GlassButton
+          className="btn-glass glass sidebar-action"
+          onClick={() => openTab({ kind: 'git', title: 'Git' })}
+        >
+          <GitBranch size={12} /> Git
+        </GlassButton>
       </div>
     </>
   );
 }
 
-function Tree({ node, depth, setMenu, statuses, dirtyDirs }: { node: FileNode; depth: number; setMenu: (m: MenuState | null) => void; statuses: Record<string, 'M' | 'U' | 'D'>; dirtyDirs: Set<string> }) {
+function Tree({
+  node,
+  depth,
+  setMenu,
+  statuses,
+  dirtyDirs,
+}: {
+  node: FileNode;
+  depth: number;
+  setMenu: (m: MenuState | null) => void;
+  statuses: Record<string, 'M' | 'U' | 'D'>;
+  dirtyDirs: Set<string>;
+}) {
   const openFile = useStore((s) => s.openFile);
   const activeTabId = useStore((s) => s.activeTabId);
   const tabs = useStore((s) => s.tabs);
@@ -184,22 +294,39 @@ function Tree({ node, depth, setMenu, statuses, dirtyDirs }: { node: FileNode; d
   };
 
   const newFileIn = async () => {
-    const name = await promptDialog({ title: `New file in ${node.path}`, placeholder: 'file name', confirmLabel: 'Create' });
+    const name = await promptDialog({
+      title: `New file in ${node.path}`,
+      placeholder: 'file name',
+      confirmLabel: 'Create',
+    });
     if (name?.trim()) await createFile(`${node.path}/${name.trim()}`);
   };
   const newFolderIn = async () => {
-    const name = await promptDialog({ title: `New folder in ${node.path}`, placeholder: 'folder name', confirmLabel: 'Create' });
+    const name = await promptDialog({
+      title: `New folder in ${node.path}`,
+      placeholder: 'folder name',
+      confirmLabel: 'Create',
+    });
     if (name?.trim()) await createFolder(`${node.path}/${name.trim()}`);
   };
 
   const rename = async () => {
-    const newName = await promptDialog({ title: `Rename ${node.name}`, placeholder: 'new name or path', initialValue: node.path, confirmLabel: 'Rename' });
-    if (newName?.trim() && newName.trim() !== node.path) await renameEntry(node.path, newName.trim());
+    const newName = await promptDialog({
+      title: `Rename ${node.name}`,
+      placeholder: 'new name or path',
+      initialValue: node.path,
+      confirmLabel: 'Rename',
+    });
+    if (newName?.trim() && newName.trim() !== node.path)
+      await renameEntry(node.path, newName.trim());
   };
   const remove = async () => {
     const ok = await confirmDialog({
       title: `Delete ${node.name}?`,
-      message: node.type === 'dir' ? `The folder "${node.path}" and everything inside it will be removed from disk. Checkpoints may still hold a copy.` : `"${node.path}" will be removed from disk. Checkpoints may still hold a copy.`,
+      message:
+        node.type === 'dir'
+          ? `The folder "${node.path}" and everything inside it will be removed from disk. Checkpoints may still hold a copy.`
+          : `"${node.path}" will be removed from disk. Checkpoints may still hold a copy.`,
       confirmLabel: 'Delete',
       danger: true,
     });
@@ -212,12 +339,38 @@ function Tree({ node, depth, setMenu, statuses, dirtyDirs }: { node: FileNode; d
     e.stopPropagation();
     const items: ContextMenuItem[] = [
       ...(node.type === 'file'
-        ? [{ label: 'Open', icon: <TechIcon name={techNameForFile(node.name) ?? node.name} size={12} />, onSelect: () => void openFile(node.path) }]
-        : [{ label: collapsed ? 'Expand' : 'Collapse', icon: collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />, onSelect: () => setCollapsed((c) => !c) }]),
-      { label: 'Copy Path', icon: <Copy size={12} />, onSelect: () => void navigator.clipboard?.writeText(node.path).catch(() => {}) },
+        ? [
+            {
+              label: 'Open',
+              icon: <TechIcon name={techNameForFile(node.name) ?? node.name} size={12} />,
+              onSelect: () => void openFile(node.path),
+            },
+          ]
+        : [
+            {
+              label: collapsed ? 'Expand' : 'Collapse',
+              icon: collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />,
+              onSelect: () => setCollapsed((c) => !c),
+            },
+          ]),
+      {
+        label: 'Copy Path',
+        icon: <Copy size={12} />,
+        onSelect: () => void navigator.clipboard?.writeText(node.path).catch(() => {}),
+      },
       { label: '', separator: true },
-      { label: 'New File…', icon: <FilePlus size={12} />, disabled: node.type !== 'dir', onSelect: () => void newFileIn() },
-      { label: 'New Folder…', icon: <FolderPlus size={12} />, disabled: node.type !== 'dir', onSelect: () => void newFolderIn() },
+      {
+        label: 'New File…',
+        icon: <FilePlus size={12} />,
+        disabled: node.type !== 'dir',
+        onSelect: () => void newFileIn(),
+      },
+      {
+        label: 'New Folder…',
+        icon: <FolderPlus size={12} />,
+        disabled: node.type !== 'dir',
+        onSelect: () => void newFolderIn(),
+      },
       { label: '', separator: true },
       { label: 'Rename…', icon: <Pencil size={12} />, onSelect: () => void rename() },
       { label: 'Delete…', icon: <Trash2 size={12} />, danger: true, onSelect: () => void remove() },
@@ -229,12 +382,20 @@ function Tree({ node, depth, setMenu, statuses, dirtyDirs }: { node: FileNode; d
     <span className="tree-item-actions" onClick={(e) => e.stopPropagation()}>
       {node.type === 'dir' && (
         <>
-          <button title="New file here" onClick={() => void newFileIn()}><FilePlus size={11} /></button>
-          <button title="New folder here" onClick={() => void newFolderIn()}><FolderPlus size={11} /></button>
+          <button title="New file here" onClick={() => void newFileIn()}>
+            <FilePlus size={11} />
+          </button>
+          <button title="New folder here" onClick={() => void newFolderIn()}>
+            <FolderPlus size={11} />
+          </button>
         </>
       )}
-      <button title="Rename" onClick={() => void rename()}><Pencil size={11} /></button>
-      <button title="Delete" onClick={() => void remove()}><Trash2 size={11} /></button>
+      <button title="Rename" onClick={() => void rename()}>
+        <Pencil size={11} />
+      </button>
+      <button title="Delete" onClick={() => void remove()}>
+        <Trash2 size={11} />
+      </button>
     </span>
   );
 
@@ -249,7 +410,9 @@ function Tree({ node, depth, setMenu, statuses, dirtyDirs }: { node: FileNode; d
         onDragStart={dragSelf}
         title={node.path}
       >
-        <span className="icon"><FileTreeIcon name={node.name} isFolder={false} size={15} status={statuses[node.path]} /></span>
+        <span className="icon">
+          <FileTreeIcon name={node.name} isFolder={false} size={15} status={statuses[node.path]} />
+        </span>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</span>
         {itemActions}
       </div>
@@ -267,20 +430,39 @@ function Tree({ node, depth, setMenu, statuses, dirtyDirs }: { node: FileNode; d
           draggable
           onDragStart={dragSelf}
           onDragOver={allowDrop}
-          onDragLeave={(e) => { if (e.target === e.currentTarget) setDragOver(false); }}
+          onDragLeave={(e) => {
+            if (e.target === e.currentTarget) setDragOver(false);
+          }}
           onDrop={(e) => void onDrop(e)}
         >
           <span className="icon" style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
             <span style={{ display: 'inline-flex', width: 12, flexShrink: 0 }}>
               {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
             </span>
-            <FileTreeIcon name={node.name} isFolder isOpen={!collapsed} size={15} status={dirtyDirs.has(node.path) ? 'M' : undefined} folder />
+            <FileTreeIcon
+              name={node.name}
+              isFolder
+              isOpen={!collapsed}
+              size={15}
+              status={dirtyDirs.has(node.path) ? 'M' : undefined}
+              folder
+            />
           </span>
           {node.name}
           {itemActions}
         </div>
       )}
-      {!collapsed && node.children?.map((c) => <Tree key={c.path} node={c} depth={node.path ? depth + 1 : depth} setMenu={setMenu} statuses={statuses} dirtyDirs={dirtyDirs} />)}
+      {!collapsed &&
+        node.children?.map((c) => (
+          <Tree
+            key={c.path}
+            node={c}
+            depth={node.path ? depth + 1 : depth}
+            setMenu={setMenu}
+            statuses={statuses}
+            dirtyDirs={dirtyDirs}
+          />
+        ))}
     </div>
   );
 }
@@ -294,7 +476,14 @@ function Tree({ node, depth, setMenu, statuses, dirtyDirs }: { node: FileNode; d
  */
 const GIT_BADGE_LABEL: Record<string, string> = { M: 'Modified', U: 'Untracked', D: 'Deleted' };
 
-const FileTreeIcon = React.memo(function FileTreeIcon({ name, isFolder, isOpen, size = 15, status, folder }: {
+const FileTreeIcon = React.memo(function FileTreeIcon({
+  name,
+  isFolder,
+  isOpen,
+  size = 15,
+  status,
+  folder,
+}: {
   name: string;
   isFolder: boolean;
   isOpen?: boolean;
@@ -323,7 +512,9 @@ const FileTreeIcon = React.memo(function FileTreeIcon({ name, isFolder, isOpen, 
         onError={(e) => {
           // Asset missing: swap to the generic icon rather than a broken image.
           const img = e.currentTarget;
-          const fallback = isFolder ? '/icons/vscode/default_folder.svg' : '/icons/vscode/default_file.svg';
+          const fallback = isFolder
+            ? '/icons/vscode/default_folder.svg'
+            : '/icons/vscode/default_file.svg';
           if (!img.src.endsWith(fallback)) img.src = fallback;
         }}
       />

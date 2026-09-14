@@ -15,12 +15,17 @@ export function Toasts() {
           {t.undo && (
             <button
               className="toast-undo"
-              onClick={() => { t.undo?.(); useStore.getState().dismissToast(t.id); }}
+              onClick={() => {
+                t.undo?.();
+                useStore.getState().dismissToast(t.id);
+              }}
             >
               <Undo2 size={11} /> Undo
             </button>
           )}
-          <button className="toast-close" onClick={() => dismissToast(t.id)}><X size={11} /></button>
+          <button className="toast-close" onClick={() => dismissToast(t.id)}>
+            <X size={11} />
+          </button>
         </div>
       ))}
     </div>

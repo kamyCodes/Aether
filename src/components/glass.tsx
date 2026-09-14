@@ -26,13 +26,7 @@
  * skips/shortens its spring or shine — behavior lives here now, not in CSS
  * class toggles.
  */
-import {
-  useEffect,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-  type RefObject,
-} from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
@@ -118,9 +112,7 @@ export function GlassToggle({
           className="toggle-thumb"
           animate={{ x: checked ? 24 : 0 }}
           transition={
-            reduceMotion
-              ? { duration: 0.01 }
-              : { type: 'spring', bounce: 0.45, duration: 0.5 }
+            reduceMotion ? { duration: 0.01 } : { type: 'spring', bounce: 0.45, duration: 0.5 }
           }
         />
       </SwitchPrimitive.Thumb>
@@ -185,9 +177,7 @@ export function GlassSegmentedControl({
               layoutId={layoutId}
               className="segment-indicator-fill-fm"
               transition={
-                reduceMotion
-                  ? { duration: 0.01 }
-                  : { type: 'spring', bounce: 0.3, duration: 0.5 }
+                reduceMotion ? { duration: 0.01 } : { type: 'spring', bounce: 0.3, duration: 0.5 }
               }
             />
           )}
@@ -239,49 +229,54 @@ export function GlassDropdown({
 
   return (
     <DropdownMenuPrimitive.Root>
-      <DropdownMenuPrimitive.Trigger
-        className={className}
-        title={title}
-        aria-label={ariaLabel}
-      >
+      <DropdownMenuPrimitive.Trigger className={className} title={title} aria-label={ariaLabel}>
         {current?.label ?? value}
         <svg className="dd-chevron" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-          <path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+          <path
+            d="M2 3.5 L5 6.5 L8 3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
         </svg>
-      </DropdownMenuPrimitive.Trigger>        <DropdownMenuPrimitive.Portal>
-          <DropdownMenuPrimitive.Content
-            className={`glass dd-content ${contentClassName}`.trim()}
-            sideOffset={6}
-            align="start"
-          >
-            {groups
-              ? groups.map((g) => (
-                  <DropdownMenuPrimitive.Group key={g.label}>
-                    <DropdownMenuPrimitive.Label className="dd-group-label">{g.label}</DropdownMenuPrimitive.Label>
-                    {g.options.map((o) => (
-                      <DropdownMenuPrimitive.Item
-                        key={o.value}
-                        className="dd-item"
-                        {...(o.value === value ? { 'data-checked': '' } : {})}
-                        onSelect={() => onValueChange(o.value)}
-                      >
-                        {o.label}
-                      </DropdownMenuPrimitive.Item>
-                    ))}
-                  </DropdownMenuPrimitive.Group>
-                ))
-              : (options ?? []).map((o) => (
-                  <DropdownMenuPrimitive.Item
-                    key={o.value}
-                    className="dd-item"
-                    {...(o.value === value ? { 'data-checked': '' } : {})}
-                    onSelect={() => onValueChange(o.value)}
-                  >
-                    {o.label}
-                  </DropdownMenuPrimitive.Item>
-                ))}
-          </DropdownMenuPrimitive.Content>
-        </DropdownMenuPrimitive.Portal>
+      </DropdownMenuPrimitive.Trigger>{' '}
+      <DropdownMenuPrimitive.Portal>
+        <DropdownMenuPrimitive.Content
+          className={`glass dd-content ${contentClassName}`.trim()}
+          sideOffset={6}
+          align="start"
+        >
+          {groups
+            ? groups.map((g) => (
+                <DropdownMenuPrimitive.Group key={g.label}>
+                  <DropdownMenuPrimitive.Label className="dd-group-label">
+                    {g.label}
+                  </DropdownMenuPrimitive.Label>
+                  {g.options.map((o) => (
+                    <DropdownMenuPrimitive.Item
+                      key={o.value}
+                      className="dd-item"
+                      {...(o.value === value ? { 'data-checked': '' } : {})}
+                      onSelect={() => onValueChange(o.value)}
+                    >
+                      {o.label}
+                    </DropdownMenuPrimitive.Item>
+                  ))}
+                </DropdownMenuPrimitive.Group>
+              ))
+            : (options ?? []).map((o) => (
+                <DropdownMenuPrimitive.Item
+                  key={o.value}
+                  className="dd-item"
+                  {...(o.value === value ? { 'data-checked': '' } : {})}
+                  onSelect={() => onValueChange(o.value)}
+                >
+                  {o.label}
+                </DropdownMenuPrimitive.Item>
+              ))}
+        </DropdownMenuPrimitive.Content>
+      </DropdownMenuPrimitive.Portal>
     </DropdownMenuPrimitive.Root>
   );
 }

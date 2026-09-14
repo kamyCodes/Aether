@@ -23,9 +23,20 @@ export function AetherMark({ size = 16 }: { size?: number }) {
       {/* entry beam */}
       <path d="M36 320 L146 310" stroke="url(#ae-beam)" strokeWidth="40" strokeLinecap="round" />
       {/* prism outline, apex lit gold */}
-      <path d="M256 118 L418 396 L94 396 Z" stroke="url(#ae-edge)" strokeWidth="38" strokeLinejoin="round" />
+      <path
+        d="M256 118 L418 396 L94 396 Z"
+        stroke="url(#ae-edge)"
+        strokeWidth="38"
+        strokeLinejoin="round"
+      />
       {/* internal refraction */}
-      <path d="M150 308 L326 298" stroke="#8D46C0" strokeOpacity="0.32" strokeWidth="34" strokeLinecap="round" />
+      <path
+        d="M150 308 L326 298"
+        stroke="#8D46C0"
+        strokeOpacity="0.32"
+        strokeWidth="34"
+        strokeLinecap="round"
+      />
       {/* dispersed spectrum leaving the right face */}
       <g strokeLinecap="round">
         <path d="M362 296 L498 252" stroke="#C9A75B" strokeWidth="40" />

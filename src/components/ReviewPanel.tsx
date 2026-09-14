@@ -34,10 +34,14 @@ export function ReviewPanel() {
     setBranch(data.branch);
     setGitFiles(data.files);
     setLoading(false);
-    setSelected((cur) => (cur && data.files.some((f) => f.path === cur) ? cur : data.files[0]?.path ?? null));
+    setSelected((cur) =>
+      cur && data.files.some((f) => f.path === cur) ? cur : (data.files[0]?.path ?? null),
+    );
   };
 
-  useEffect(() => { void refresh(); /* eslint-disable-next-line */ }, [workspaceId]);
+  useEffect(() => {
+    void refresh(); /* eslint-disable-next-line */
+  }, [workspaceId]);
 
   // Unsaved buffers not already covered by the git list: diff buffer vs the
   // on-disk saved content (fetched per file, cached until refresh).
@@ -47,20 +51,30 @@ export function ReviewPanel() {
     const todo = dirty.filter((p) => !inGit.has(p));
     void (async () => {
       const out: Record<string, DiffHunk[]> = {};
-      await Promise.all(todo.map(async (p) => {
-        const buffer = fileContents[p];
-        if (buffer === undefined) return;
-        let saved = '';
-        try {
-          if (workspaceId) {
-            saved = (await get<{ content: string }>(`/workspaces/${workspaceId}/file?path=${encodeURIComponent(p)}`)).content;
+      await Promise.all(
+        todo.map(async (p) => {
+          const buffer = fileContents[p];
+          if (buffer === undefined) return;
+          let saved = '';
+          try {
+            if (workspaceId) {
+              saved = (
+                await get<{ content: string }>(
+                  `/workspaces/${workspaceId}/file?path=${encodeURIComponent(p)}`,
+                )
+              ).content;
+            }
+          } catch {
+            saved = ''; /* deleted from disk: whole buffer is an addition */
           }
-        } catch { saved = ''; /* deleted from disk: whole buffer is an addition */ }
-        out[p] = buildBufferDiff(p, saved, buffer);
-      }));
+          out[p] = buildBufferDiff(p, saved, buffer);
+        }),
+      );
       if (!cancelled) setBufferHunks(out);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [dirty, gitFiles, fileContents, workspaceId]);
 
   const dirtyEntries = useMemo(() => {
@@ -84,16 +98,25 @@ export function ReviewPanel() {
           </strong>
           <span className="review-stats">
             {gitFiles.length > 0 && (
-              <><span style={{ color: 'var(--ok)' }}>+{totalAdd}</span>{' '}<span style={{ color: 'var(--err)' }}>−{totalDel}</span>{' · '}</>
+              <>
+                <span style={{ color: 'var(--ok)' }}>+{totalAdd}</span>{' '}
+                <span style={{ color: 'var(--err)' }}>−{totalDel}</span>
+                {' · '}
+              </>
             )}
-            {gitFiles.length} changed{dirtyEntries.length ? ` · ${dirtyEntries.length} unsaved` : ''}
+            {gitFiles.length} changed
+            {dirtyEntries.length ? ` · ${dirtyEntries.length} unsaved` : ''}
           </span>
           <div style={{ flex: 1 }} />
-          <button title="Refresh" onClick={() => void refresh()}><RefreshCw size={12} className={loading ? 'spin' : ''} /></button>
+          <button title="Refresh" onClick={() => void refresh()}>
+            <RefreshCw size={12} className={loading ? 'spin' : ''} />
+          </button>
         </div>
 
         {isEmpty ? (
-          <div className="empty-state">Nothing pending — working tree clean, no unsaved buffers.</div>
+          <div className="empty-state">
+            Nothing pending — working tree clean, no unsaved buffers.
+          </div>
         ) : (
           <div className="review-files">
             {gitFiles.map((f) => (
@@ -103,9 +126,14 @@ export function ReviewPanel() {
                 onClick={() => setSelected(f.path)}
                 title={`${f.status} · +${f.additions} −${f.deletions}`}
               >
-                <span className={`badge ${f.status === 'added' ? 'on' : ''}`}>{STATUS_LABEL[f.status] ?? f.status}</span>
+                <span className={`badge ${f.status === 'added' ? 'on' : ''}`}>
+                  {STATUS_LABEL[f.status] ?? f.status}
+                </span>
                 <span className="review-file-path">{f.path}</span>
-                <span className="review-file-stats"><span style={{ color: 'var(--ok)' }}>+{f.additions}</span> <span style={{ color: 'var(--err)' }}>−{f.deletions}</span></span>
+                <span className="review-file-stats">
+                  <span style={{ color: 'var(--ok)' }}>+{f.additions}</span>{' '}
+                  <span style={{ color: 'var(--err)' }}>−{f.deletions}</span>
+                </span>
               </button>
             ))}
             {dirtyEntries.map((p) => (
@@ -115,7 +143,9 @@ export function ReviewPanel() {
                 onClick={() => setSelected(p)}
                 title="Unsaved editor buffer"
               >
-                <span className="badge" style={{ color: 'var(--warn)' }}>buf</span>
+                <span className="badge" style={{ color: 'var(--warn)' }}>
+                  buf
+                </span>
                 <span className="review-file-path">{p}</span>
                 <span className="dirty-dot" title="Unsaved" />
               </button>
@@ -128,23 +158,31 @@ export function ReviewPanel() {
         {selectedGit && (
           <DiffBody
             path={selectedGit.path}
-            stats={<><span style={{ color: 'var(--ok)' }}>+{selectedGit.additions}</span><span style={{ color: 'var(--err)' }}>−{selectedGit.deletions}</span></>}
+            stats={
+              <>
+                <span style={{ color: 'var(--ok)' }}>+{selectedGit.additions}</span>
+                <span style={{ color: 'var(--err)' }}>−{selectedGit.deletions}</span>
+              </>
+            }
             hunks={selectedGit.hunks}
             onOpen={() => void openFile(selectedGit.path)}
           />
         )}
-        {selectedDirtyPath && (
-          bufferHunks[selectedDirtyPath]?.length ? (
+        {selectedDirtyPath &&
+          (bufferHunks[selectedDirtyPath]?.length ? (
             <DiffBody
               path={selectedDirtyPath}
-              stats={<span className="badge" style={{ color: 'var(--warn)' }}>unsaved buffer</span>}
+              stats={
+                <span className="badge" style={{ color: 'var(--warn)' }}>
+                  unsaved buffer
+                </span>
+              }
               hunks={bufferHunks[selectedDirtyPath]}
               onOpen={() => void openFile(selectedDirtyPath)}
             />
           ) : (
             <div className="empty-state">Buffer matches the saved file — nothing to show.</div>
-          )
-        )}
+          ))}
         {!selectedGit && !selectedDirtyPath && !isEmpty && !loading && (
           <div className="empty-state">Select a file to see its diff.</div>
         )}
@@ -161,15 +199,22 @@ function buildBufferDiff(path: string, saved: string, buffer: string): DiffHunk[
   let n = 1;
   for (const part of diffLines(saved, buffer)) {
     const lines = part.value.replace(/\n$/, '').split('\n');
-    if (part.added) for (const l of lines) hunks[0].lines.push({ type: 'add', old: -1, new: n++, text: l });
-    else if (part.removed) for (const l of lines) hunks[0].lines.push({ type: 'del', old: o++, new: -1, text: l });
+    if (part.added)
+      for (const l of lines) hunks[0].lines.push({ type: 'add', old: -1, new: n++, text: l });
+    else if (part.removed)
+      for (const l of lines) hunks[0].lines.push({ type: 'del', old: o++, new: -1, text: l });
     else for (const l of lines) hunks[0].lines.push({ type: 'ctx', old: o++, new: n++, text: l });
   }
   return hunks;
 }
 
 /** Shared diff renderer for git files and dirty buffers. */
-function DiffBody({ path, stats, hunks, onOpen }: {
+function DiffBody({
+  path,
+  stats,
+  hunks,
+  onOpen,
+}: {
   path: string;
   stats: React.ReactNode;
   hunks: DiffHunk[];
@@ -182,8 +227,12 @@ function DiffBody({ path, stats, hunks, onOpen }: {
         <strong>{path}</strong>
         {stats}
         <div style={{ flex: 1 }} />
-        <button onClick={onOpen} title="Open in editor">Open</button>
-        <button onClick={() => useStore.setState({ activeTabId: null })} title="Close"><X size={13} /></button>
+        <button onClick={onOpen} title="Open in editor">
+          Open
+        </button>
+        <button onClick={() => useStore.setState({ activeTabId: null })} title="Close">
+          <X size={13} />
+        </button>
       </div>
       <div className="diff-view">
         {hunks.map((h, hi) => (
@@ -191,7 +240,9 @@ function DiffBody({ path, stats, hunks, onOpen }: {
             {h.lines.map((l, li) => (
               <div key={li} className={`diff-line ${l.type}`}>
                 <span className="ln">{l.old > 0 ? l.old : l.new > 0 ? l.new : ''}</span>
-                <span className="sign">{l.type === 'add' ? '+' : l.type === 'del' ? '−' : ' '}</span>
+                <span className="sign">
+                  {l.type === 'add' ? '+' : l.type === 'del' ? '−' : ' '}
+                </span>
                 <span style={{ whiteSpace: 'pre-wrap' }}>{l.text}</span>
               </div>
             ))}

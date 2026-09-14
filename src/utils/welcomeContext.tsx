@@ -43,7 +43,11 @@ interface WelcomeInput {
 }
 
 /** Flatten the tree once; memoized by object identity upstream in the component. */
-function collectFiles(tree: FileNode | null): { names: Set<string>; paths: Set<string>; count: number } {
+function collectFiles(tree: FileNode | null): {
+  names: Set<string>;
+  paths: Set<string>;
+  count: number;
+} {
   const names = new Set<string>();
   const paths = new Set<string>();
   let count = 0;
@@ -73,9 +77,14 @@ export function getWelcomeContext(input: WelcomeInput): WelcomeContext {
 
   const isNode = has('package.json');
   const isPython = has('requirements.txt') || has('pyproject.toml') || hasSuffix('.py');
-  const hasTests = hasSuffix('.test.ts', '.test.tsx', '.test.js', '.spec.ts', '.spec.js') ||
-    has('jest.config.js') || has('jest.config.ts') || has('vitest.config.ts') || has('pytest.ini') ||
-    files.paths.has('test') || files.paths.has('tests');
+  const hasTests =
+    hasSuffix('.test.ts', '.test.tsx', '.test.js', '.spec.ts', '.spec.js') ||
+    has('jest.config.js') ||
+    has('jest.config.ts') ||
+    has('vitest.config.ts') ||
+    has('pytest.ini') ||
+    files.paths.has('test') ||
+    files.paths.has('tests');
   const hasReadme = files.names.has('readme.md') || files.names.has('readme');
 
   const finished = tasks
@@ -85,17 +94,46 @@ export function getWelcomeContext(input: WelcomeInput): WelcomeContext {
   if (!hasWorkspace) {
     cards.push(
       { id: 'add-folder', icon: 'folder', label: 'Open a folder', prompt: '' }, // handled specially by the component
-      { id: 'scaffold', icon: 'sparkles', label: 'Scaffold a new project', prompt: 'Scaffold a new project from scratch: pick a sensible stack, create the structure, and make it run.' },
+      {
+        id: 'scaffold',
+        icon: 'sparkles',
+        label: 'Scaffold a new project',
+        prompt:
+          'Scaffold a new project from scratch: pick a sensible stack, create the structure, and make it run.',
+      },
     );
   } else if (files.count === 0) {
     cards.push(
-      { id: 'scaffold', icon: 'sparkles', label: 'Scaffold a new project', prompt: 'Scaffold a new project in this empty workspace: choose a fitting stack, create the structure, and make it run.' },
-      { id: 'import-template', icon: 'wand', label: 'Import from a template', prompt: 'Set up this workspace from a well-known starter template of your choice — explain the pick first.' },
-      { id: 'plan', icon: 'compass', label: 'Plan the project', prompt: 'Help me plan a project for this workspace: ask me a few questions, then write the plan to PLAN.md.' },
+      {
+        id: 'scaffold',
+        icon: 'sparkles',
+        label: 'Scaffold a new project',
+        prompt:
+          'Scaffold a new project in this empty workspace: choose a fitting stack, create the structure, and make it run.',
+      },
+      {
+        id: 'import-template',
+        icon: 'wand',
+        label: 'Import from a template',
+        prompt:
+          'Set up this workspace from a well-known starter template of your choice — explain the pick first.',
+      },
+      {
+        id: 'plan',
+        icon: 'compass',
+        label: 'Plan the project',
+        prompt:
+          'Help me plan a project for this workspace: ask me a few questions, then write the plan to PLAN.md.',
+      },
     );
   } else {
     if (finished) {
-      const verb = finished.status === 'completed' ? 'completed' : finished.status === 'failed' ? 'failed' : 'cancelled';
+      const verb =
+        finished.status === 'completed'
+          ? 'completed'
+          : finished.status === 'failed'
+            ? 'failed'
+            : 'cancelled';
       const cleanTitle = finished.title.replace(/\s+/g, ' ').trim().slice(0, 48);
       cards.push({
         id: 'resume',
@@ -127,12 +165,25 @@ export function getWelcomeContext(input: WelcomeInput): WelcomeContext {
         id: 'add-readme',
         icon: 'compass',
         label: 'Write a README',
-        prompt: 'Write a concise README.md for this project: what it is, how to run it, and its structure.',
+        prompt:
+          'Write a concise README.md for this project: what it is, how to run it, and its structure.',
       });
     }
     cards.push(
-      { id: 'tour', icon: 'compass', label: 'Tour this codebase', prompt: 'Give me a tour of this project: entry points, structure, and how the pieces fit together.' },
-      { id: 'fix', icon: 'bug', label: 'Fix something broken', prompt: 'Look for bugs or errors in this project, list what you find, and fix the most important one.' },
+      {
+        id: 'tour',
+        icon: 'compass',
+        label: 'Tour this codebase',
+        prompt:
+          'Give me a tour of this project: entry points, structure, and how the pieces fit together.',
+      },
+      {
+        id: 'fix',
+        icon: 'bug',
+        label: 'Fix something broken',
+        prompt:
+          'Look for bugs or errors in this project, list what you find, and fix the most important one.',
+      },
     );
   }
   // Cap the grid at 4 cards, ranked by the order above (resume/review first).
@@ -141,15 +192,33 @@ export function getWelcomeContext(input: WelcomeInput): WelcomeContext {
   // ---------- Message ----------
   let message: WelcomeContext['message'];
   if (!hasWorkspace) {
-    message = 'Open a folder to begin, or let the agent scaffold an entire project from a single sentence.';
+    message =
+      'Open a folder to begin, or let the agent scaffold an entire project from a single sentence.';
   } else if (files.count === 0) {
-    message = workspaceName ? <>{workspaceName} is empty — describe what to build and the agent will scaffold it.</> : 'This workspace is empty — describe what to build and the agent will scaffold it.';
+    message = workspaceName ? (
+      <>{workspaceName} is empty — describe what to build and the agent will scaffold it.</>
+    ) : (
+      'This workspace is empty — describe what to build and the agent will scaffold it.'
+    );
   } else if (dirtyFiles.length > 0) {
-    message = <>Welcome back to <strong>{workspaceName}</strong> — {dirtyFiles.length} unsaved change{dirtyFiles.length > 1 ? 's' : ''} waiting.</>;
+    message = (
+      <>
+        Welcome back to <strong>{workspaceName}</strong> — {dirtyFiles.length} unsaved change
+        {dirtyFiles.length > 1 ? 's' : ''} waiting.
+      </>
+    );
   } else if (isNode || isPython) {
-    message = <>Welcome back to <strong>{workspaceName}</strong>.</>;
+    message = (
+      <>
+        Welcome back to <strong>{workspaceName}</strong>.
+      </>
+    );
   } else {
-    message = <>Working in <strong>{workspaceName}</strong> — describe a task and the agent will dig in.</>;
+    message = (
+      <>
+        Working in <strong>{workspaceName}</strong> — describe a task and the agent will dig in.
+      </>
+    );
   }
 
   return { message, cards: capped };

@@ -51,5 +51,8 @@ test('generated picker script is static — no user input interpolated', async (
   const script = mod.__test.buildPsScript();
   assert.ok(!script.includes(evil), 'user input must never appear in generated script source');
   assert.ok(script.includes('$StartDir'), 'script should take values via parameters');
-  assert.ok(script.includes("param([string]$StartDir"), 'mode/marker/startDir arrive as param() arguments');
+  assert.ok(
+    script.includes('param([string]$StartDir'),
+    'mode/marker/startDir arrive as param() arguments',
+  );
 });

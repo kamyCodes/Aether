@@ -14,7 +14,12 @@ export interface ContextMenuItem {
  * Right-click context menu rendered in a portal so it escapes the sidebar's
  * overflow. Clamps to the viewport, closes on outside click / Escape / scroll.
  */
-export function ContextMenu({ x, y, items, onClose }: {
+export function ContextMenu({
+  x,
+  y,
+  items,
+  onClose,
+}: {
   x: number;
   y: number;
   items: ContextMenuItem[];
@@ -36,7 +41,9 @@ export function ContextMenu({ x, y, items, onClose }: {
     const close = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
     window.addEventListener('mousedown', close);
     window.addEventListener('contextmenu', close);
     window.addEventListener('keydown', onKey);
@@ -50,7 +57,12 @@ export function ContextMenu({ x, y, items, onClose }: {
   }, [x, y, onClose]);
 
   return createPortal(
-    <div ref={ref} className="context-menu fade-in" style={{ left: pos.x, top: pos.y }} onContextMenu={(e) => e.preventDefault()}>
+    <div
+      ref={ref}
+      className="context-menu fade-in"
+      style={{ left: pos.x, top: pos.y }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
       {items.map((it, i) =>
         it.separator ? (
           <div key={`sep-${i}`} className="context-menu-sep" />
@@ -59,7 +71,10 @@ export function ContextMenu({ x, y, items, onClose }: {
             key={it.label}
             className={`context-menu-item ${it.danger ? 'danger' : ''}`}
             disabled={it.disabled}
-            onClick={() => { onClose(); it.onSelect?.(); }}
+            onClick={() => {
+              onClose();
+              it.onSelect?.();
+            }}
           >
             {it.icon && <span className="context-menu-ico">{it.icon}</span>}
             {it.label}

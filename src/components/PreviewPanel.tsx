@@ -27,7 +27,9 @@ export function PreviewPanel() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="preview-toolbar">
-        <button className="primary" onClick={() => void start()}>Start Preview</button>
+        <button className="primary" onClick={() => void start()}>
+          Start Preview
+        </button>
         {/* Liquid Glass: Radix ToggleGroup + layoutId indicator */}
         <GlassSegmentedControl
           layoutId="preview-device"
@@ -35,25 +37,51 @@ export function PreviewPanel() {
           ariaLabel="Preview device size"
           value={device}
           onValueChange={(v) => setDevice(v as keyof typeof SIZES)}
-          options={(Object.keys(SIZES) as (keyof typeof SIZES)[]).map((d) => ({ value: d, label: d }))}
+          options={(Object.keys(SIZES) as (keyof typeof SIZES)[]).map((d) => ({
+            value: d,
+            label: d,
+          }))}
         />
         <input
           style={{ flex: 1 }}
           placeholder="Paste a URL to preview"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') setUrl(input); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') setUrl(input);
+          }}
         />
-        {url && <button onClick={() => setUrl(url)}><RotateCw size={12} /> Reload</button>}
+        {url && (
+          <button onClick={() => setUrl(url)}>
+            <RotateCw size={12} /> Reload
+          </button>
+        )}
       </div>
       {error && <div style={{ padding: 8, color: 'var(--err)', fontSize: 12 }}>{error}</div>}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center', background: 'var(--bg)', overflow: 'auto' }}>
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          justifyContent: 'center',
+          background: 'var(--bg)',
+          overflow: 'auto',
+        }}
+      >
         {url ? (
-          <iframe key={url + device} className="preview-frame" src={url} style={{ width: SIZES[device] }} title="preview" />
+          <iframe
+            key={url + device}
+            className="preview-frame"
+            src={url}
+            style={{ width: SIZES[device] }}
+            title="preview"
+          />
         ) : (
           <div className="empty-state">
             <div>Live preview serves the workspace over HTTP with reload-on-change.</div>
-            <div style={{ fontSize: 11 }}>Best for static sites / built output. Start a dev server in the terminal for HMR apps.</div>
+            <div style={{ fontSize: 11 }}>
+              Best for static sites / built output. Start a dev server in the terminal for HMR apps.
+            </div>
           </div>
         )}
       </div>

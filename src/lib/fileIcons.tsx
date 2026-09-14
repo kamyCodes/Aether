@@ -15,10 +15,20 @@ export interface FileIconDef {
   svg?: (props: { size: number; color: string }) => React.ReactElement;
 }
 
-const S = (size: number) => ({ width: size, height: size, viewBox: '0 0 16 16', fill: 'none' as const, xmlns: 'http://www.w3.org/2000/svg' });
+const S = (size: number) => ({
+  width: size,
+  height: size,
+  viewBox: '0 0 16 16',
+  fill: 'none' as const,
+  xmlns: 'http://www.w3.org/2000/svg',
+});
 
 /** Stroke-width 1.5 keeps glyphs optically consistent with lucide 12-14px icons. */
-const stroke = { strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+const stroke = {
+  strokeWidth: 1.5,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+};
 
 export const fileIconDefs: Record<string, FileIconDef> = {
   ts: {
@@ -113,7 +123,11 @@ export const fileIconDefs: Record<string, FileIconDef> = {
     svg: ({ size, color }) => (
       <svg {...S(size)}>
         <ellipse cx="8" cy="4" rx="5.5" ry="2" stroke={color} {...stroke} />
-        <path d="M2.5 4V12C2.5 13.1 5 14 8 14C11 14 13.5 13.1 13.5 12V4" stroke={color} {...stroke} />
+        <path
+          d="M2.5 4V12C2.5 13.1 5 14 8 14C11 14 13.5 13.1 13.5 12V4"
+          stroke={color}
+          {...stroke}
+        />
         <path d="M2.5 8C2.5 9.1 5 10 8 10C11 10 13.5 9.1 13.5 8" stroke={color} {...stroke} />
       </svg>
     ),
@@ -131,12 +145,19 @@ export const fileIconDefs: Record<string, FileIconDef> = {
   yml: { color: '#a074c4', text: 'Y' },
   yaml: { color: '#a074c4', text: 'Y' },
   toml: { color: '#8b93a1', text: 'T' },
-  lock: { color: '#8b93a1', svg: ({ size, color }) => (
-    <svg {...S(size)}>
-      <rect x="3.5" y="7" width="9" height="6.5" rx="1.5" stroke={color} {...stroke} />
-      <path d="M5.5 7V5C5.5 3.6 6.6 2.5 8 2.5C9.4 2.5 10.5 3.6 10.5 5V7" stroke={color} {...stroke} />
-    </svg>
-  ) },
+  lock: {
+    color: '#8b93a1',
+    svg: ({ size, color }) => (
+      <svg {...S(size)}>
+        <rect x="3.5" y="7" width="9" height="6.5" rx="1.5" stroke={color} {...stroke} />
+        <path
+          d="M5.5 7V5C5.5 3.6 6.6 2.5 8 2.5C9.4 2.5 10.5 3.6 10.5 5V7"
+          stroke={color}
+          {...stroke}
+        />
+      </svg>
+    ),
+  },
   svg: { color: '#8dc149', text: 'SV' },
   png: { color: '#a074c4', text: 'IM' },
   jpg: { color: '#a074c4', text: 'IM' },
@@ -148,18 +169,25 @@ export const fileIconDefs: Record<string, FileIconDef> = {
   pdf: { color: '#cc3e44', text: 'PDF' },
   zip: { color: '#e5c07b', text: 'Z' },
   gitignore: { color: '#e37933', text: 'G' },
-  dockerfile: { color: '#519aba', svg: ({ size, color }) => (
-    <svg {...S(size)}>
-      <rect x="2.5" y="8" width="11" height="4" rx="0.5" stroke={color} {...stroke} />
-      <path d="M4.5 8V5.5M6.5 8V5.5M8.5 8V5.5M10.5 8V5.5M4.5 5.5V3.5" stroke={color} {...stroke} />
-      <path d="M1.5 14C3 15 5 15 8 15C11 15 13 15 14.5 14" stroke={color} {...stroke} />
-    </svg>
-  ) },
+  dockerfile: {
+    color: '#519aba',
+    svg: ({ size, color }) => (
+      <svg {...S(size)}>
+        <rect x="2.5" y="8" width="11" height="4" rx="0.5" stroke={color} {...stroke} />
+        <path
+          d="M4.5 8V5.5M6.5 8V5.5M8.5 8V5.5M10.5 8V5.5M4.5 5.5V3.5"
+          stroke={color}
+          {...stroke}
+        />
+        <path d="M1.5 14C3 15 5 15 8 15C11 15 13 15 14.5 14" stroke={color} {...stroke} />
+      </svg>
+    ),
+  },
 };
 
 /** Special full-filename matches (checked before extension). */
 const fileNameOverrides: Record<string, keyof typeof fileIconDefs | FileIconDef> = {
-  'dockerfile': 'dockerfile',
+  dockerfile: 'dockerfile',
   '.gitignore': 'gitignore',
   '.env': 'env',
   '.env.local': 'env',
@@ -167,8 +195,8 @@ const fileNameOverrides: Record<string, keyof typeof fileIconDefs | FileIconDef>
   '.env.production': 'env',
   'package.json': 'json',
   'tsconfig.json': 'json',
-  'makefile': { color: '#8b93a1', text: 'M' },
-  'license': { color: '#e5c07b', text: 'L' },
+  makefile: { color: '#8b93a1', text: 'M' },
+  license: { color: '#e5c07b', text: 'L' },
   'readme.md': 'md',
 };
 
@@ -185,9 +213,25 @@ export function FileIcon({ name, size = 14 }: { name: string; size?: number }) {
   const def = defFor(name);
   if (!def) {
     return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M4 1.5H9.5L12.5 4.5V14.5H4V1.5Z" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" />
-        <path d="M9.5 1.5V4.5H12.5" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" />
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 16 16"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M4 1.5H9.5L12.5 4.5V14.5H4V1.5Z"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          strokeLinejoin="round"
+        />
+        <path
+          d="M9.5 1.5V4.5H12.5"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          strokeLinejoin="round"
+        />
       </svg>
     );
   }

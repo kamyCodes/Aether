@@ -1,7 +1,21 @@
 import { create } from 'zustand';
 import type {
-  ActivityItem, AgentQuestion, AgentTask, AppSettings, ChatMessage, ChangeProposal,
-  ContextReport, FileNode, MemoryEntry, ModelInfo, PermissionRequest, Skill, StreamStatus, TerminalInfo, UsageEvent, WorkspaceInfo,
+  ActivityItem,
+  AgentQuestion,
+  AgentTask,
+  AppSettings,
+  ChatMessage,
+  ChangeProposal,
+  ContextReport,
+  FileNode,
+  MemoryEntry,
+  ModelInfo,
+  PermissionRequest,
+  Skill,
+  StreamStatus,
+  TerminalInfo,
+  UsageEvent,
+  WorkspaceInfo,
 } from '../../shared/types';
 import { get, post, put, del } from './api';
 
@@ -230,7 +244,9 @@ export function connectWs(store: {
     try {
       const { type, payload } = JSON.parse(ev.data);
       store.handleWs(type, payload);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   };
 }
 export function wsSend(type: string, payload: unknown) {
@@ -293,7 +309,8 @@ export const useStore = create<AppState>((setState, getState) => ({
         tasks.unshift(t);
         // When the task reaches a terminal state, close out any pending
         // assistant bubble so it stops showing the typing dots.
-        const terminal = t.status === 'completed' || t.status === 'failed' || t.status === 'cancelled';
+        const terminal =
+          t.status === 'completed' || t.status === 'failed' || t.status === 'cancelled';
         // Auto-dismiss stale proposals: once the proposing task hits a
         // terminal state, an un-acted-on pending proposal can no longer be
         // applied to anything meaningful — sweep it instead of letting the
@@ -301,7 +318,9 @@ export const useStore = create<AppState>((setState, getState) => ({
         // are left for the 30-minute freshness filter in AgentChat.
         const staleProposalIds = new Set(
           terminal
-            ? st.proposals.filter((p) => p.status === 'pending' && p.taskId === t.id).map((p) => p.id)
+            ? st.proposals
+                .filter((p) => p.status === 'pending' && p.taskId === t.id)
+                .map((p) => p.id)
             : [],
         );
         setState({
@@ -321,7 +340,13 @@ export const useStore = create<AppState>((setState, getState) => ({
                       ? {
                           ...msg,
                           pending: false,
-                          content: msg.content || (t.status === 'failed' ? '⚠ Task failed — see Settings → Logs for details.' : t.status === 'cancelled' ? 'Task ended.' : '(no response)'),
+                          content:
+                            msg.content ||
+                            (t.status === 'failed'
+                              ? '⚠ Task failed — see Settings → Logs for details.'
+                              : t.status === 'cancelled'
+                                ? 'Task ended.'
+                                : '(no response)'),
                           error: t.status === 'failed',
                         }
                       : msg,
@@ -333,7 +358,12 @@ export const useStore = create<AppState>((setState, getState) => ({
         break;
       }
       case 'permission':
-        setState({ permissions: [payload as PermissionRequest, ...st.permissions.filter((p) => p.id !== (payload as PermissionRequest).id)] });
+        setState({
+          permissions: [
+            payload as PermissionRequest,
+            ...st.permissions.filter((p) => p.id !== (payload as PermissionRequest).id),
+          ],
+        });
         break;
       case 'question': {
         const q = payload as AgentQuestion;
@@ -341,7 +371,12 @@ export const useStore = create<AppState>((setState, getState) => ({
         break;
       }
       case 'proposal':
-        setState({ proposals: [payload as ChangeProposal, ...st.proposals.filter((p) => p.id !== (payload as ChangeProposal).id)] });
+        setState({
+          proposals: [
+            payload as ChangeProposal,
+            ...st.proposals.filter((p) => p.id !== (payload as ChangeProposal).id),
+          ],
+        });
         break;
       case 'usage':
         setState({ usage: [payload as UsageEvent, ...st.usage].slice(0, 100) });
@@ -365,7 +400,12 @@ export const useStore = create<AppState>((setState, getState) => ({
         break;
       case 'agent:delta': {
         const d = payload as { taskId: string; delta: string };
-        setState({ agentStream: { ...st.agentStream, [d.taskId]: (st.agentStream[d.taskId] ?? '') + d.delta } });
+        setState({
+          agentStream: {
+            ...st.agentStream,
+            [d.taskId]: (st.agentStream[d.taskId] ?? '') + d.delta,
+          },
+        });
         break;
       }
       case 'agent:status': {
@@ -377,11 +417,16 @@ export const useStore = create<AppState>((setState, getState) => ({
         const m = payload as { taskId: string; content: string };
         setState((s2) => ({
           agentStream: { ...s2.agentStream, [m.taskId]: '' },
-          tasks: s2.tasks.map((t) => t.id === m.taskId ? { ...t } : t),
+          tasks: s2.tasks.map((t) => (t.id === m.taskId ? { ...t } : t)),
           // The final answer becomes the pending assistant bubble's content.
           chatSessions: s2.chatSessions.map((s) =>
             s.id === s2.activeChatId
-              ? { ...s, messages: s.messages.map((msg) => (msg.pending && msg.role === 'assistant' ? { ...msg, content: m.content } : msg)) }
+              ? {
+                  ...s,
+                  messages: s.messages.map((msg) =>
+                    msg.pending && msg.role === 'assistant' ? { ...msg, content: m.content } : msg,
+                  ),
+                }
               : s,
           ),
         }));
@@ -405,7 +450,8 @@ export const useStore = create<AppState>((setState, getState) => ({
   loadWorkspaces: async () => {
     const workspaces = await get<WorkspaceInfo[]>('/workspaces');
     setState({ workspaces });
-    if (!getState().workspaceId && workspaces.length) await getState().selectWorkspace(workspaces[0].id);
+    if (!getState().workspaceId && workspaces.length)
+      await getState().selectWorkspace(workspaces[0].id);
   },
 
   addWorkspace: async (root) => {
@@ -419,7 +465,9 @@ export const useStore = create<AppState>((setState, getState) => ({
     await getState().refreshTree();
     void getState().loadMemory();
     void getState().refreshSkills(); // re-scope the skills panel to this project
-    void post(`/workspaces/${id}/index`, { incremental: false }).then(() => getState().refreshContext());
+    void post(`/workspaces/${id}/index`, { incremental: false }).then(() =>
+      getState().refreshContext(),
+    );
   },
 
   refreshTree: async () => {
@@ -430,7 +478,9 @@ export const useStore = create<AppState>((setState, getState) => ({
     // Git badges for the tree: refresh alongside the tree (cheap; server
     // returns empty when the workspace isn't a repo). Fire-and-forget so a
     // slow statusMatrix never delays the tree render.
-    void get<{ files: { path: string; status: string }[]; current?: string }>(`/workspaces/${id}/git/status`)
+    void get<{ files: { path: string; status: string }[]; current?: string }>(
+      `/workspaces/${id}/git/status`,
+    )
       .then((gs) => {
         const map: Record<string, 'M' | 'U' | 'D'> = {};
         for (const f of gs.files) {
@@ -447,11 +497,22 @@ export const useStore = create<AppState>((setState, getState) => ({
     const st = getState();
     const existing = st.tabs.find((t) => t.kind === 'file' && t.path === path);
     if (existing) {
-      setState({ activeTabId: existing.id, tabs: st.tabs.map((t) => (t.id === existing.id ? { ...t, preview: preview ?? t.preview } : t)) });
+      setState({
+        activeTabId: existing.id,
+        tabs: st.tabs.map((t) =>
+          t.id === existing.id ? { ...t, preview: preview ?? t.preview } : t,
+        ),
+      });
       return;
     }
     await st.loadFile(path);
-    const tab: OpenTab = { id: `file:${path}`, kind: 'file', title: path.split('/').pop() ?? path, path, preview };
+    const tab: OpenTab = {
+      id: `file:${path}`,
+      kind: 'file',
+      title: path.split('/').pop() ?? path,
+      path,
+      preview,
+    };
     setState({ tabs: [...st.tabs, tab], activeTabId: tab.id });
   },
 
@@ -470,7 +531,8 @@ export const useStore = create<AppState>((setState, getState) => ({
     const st = getState();
     const idx = st.tabs.findIndex((t) => t.id === id);
     const tabs = st.tabs.filter((t) => t.id !== id);
-    const activeTabId = st.activeTabId === id ? tabs[Math.max(0, idx - 1)]?.id ?? null : st.activeTabId;
+    const activeTabId =
+      st.activeTabId === id ? (tabs[Math.max(0, idx - 1)]?.id ?? null) : st.activeTabId;
     setState({ tabs, activeTabId });
   },
 
@@ -478,14 +540,19 @@ export const useStore = create<AppState>((setState, getState) => ({
 
   setFileContent: (path, content) => {
     const st = getState();
-    setState({ fileContents: { ...st.fileContents, [path]: content }, dirtyFiles: [...new Set([...(Array.isArray(st.dirtyFiles) ? st.dirtyFiles : []), path])] });
+    setState({
+      fileContents: { ...st.fileContents, [path]: content },
+      dirtyFiles: [...new Set([...(Array.isArray(st.dirtyFiles) ? st.dirtyFiles : []), path])],
+    });
   },
 
   loadFile: async (path) => {
     const id = getState().workspaceId;
     if (!id) return;
     try {
-      const { content } = await get<{ path: string; content: string }>(`/workspaces/${id}/file?path=${encodeURIComponent(path)}`);
+      const { content } = await get<{ path: string; content: string }>(
+        `/workspaces/${id}/file?path=${encodeURIComponent(path)}`,
+      );
       setState({ fileContents: { ...getState().fileContents, [path]: content } });
     } catch {
       setState({ fileContents: { ...getState().fileContents, [path]: '' } });
@@ -497,7 +564,9 @@ export const useStore = create<AppState>((setState, getState) => ({
     if (!id) return;
     await put(`/workspaces/${id}/file`, { path, content });
     const st = getState();
-    setState({ dirtyFiles: (Array.isArray(st.dirtyFiles) ? st.dirtyFiles : []).filter((p) => p !== path) });
+    setState({
+      dirtyFiles: (Array.isArray(st.dirtyFiles) ? st.dirtyFiles : []).filter((p) => p !== path),
+    });
   },
 
   createFile: async (path) => {
@@ -523,13 +592,29 @@ export const useStore = create<AppState>((setState, getState) => ({
     await post(`/workspaces/${id}/rename`, { from, to: to.trim() });
     const st = getState();
     // Move editor state to the new path.
-    const tabs = st.tabs.map((t) => (t.path === from ? { ...t, path: to.trim(), id: `file:${to.trim()}`, title: to.trim().split('/').pop() ?? to.trim() } : t));
+    const tabs = st.tabs.map((t) =>
+      t.path === from
+        ? {
+            ...t,
+            path: to.trim(),
+            id: `file:${to.trim()}`,
+            title: to.trim().split('/').pop() ?? to.trim(),
+          }
+        : t,
+    );
     const fileContents = { ...st.fileContents };
     if (fileContents[from] !== undefined) {
       fileContents[to.trim()] = fileContents[from];
       delete fileContents[from];
     }
-    setState({ tabs, fileContents, activeTabId: st.activeTabId === `file:${from}` ? `file:${to.trim()}` : st.activeTabId, dirtyFiles: (Array.isArray(st.dirtyFiles) ? st.dirtyFiles : []).map((p) => (p === from ? to.trim() : p)) });
+    setState({
+      tabs,
+      fileContents,
+      activeTabId: st.activeTabId === `file:${from}` ? `file:${to.trim()}` : st.activeTabId,
+      dirtyFiles: (Array.isArray(st.dirtyFiles) ? st.dirtyFiles : []).map((p) =>
+        p === from ? to.trim() : p,
+      ),
+    });
     await getState().refreshTree();
   },
 
@@ -542,19 +627,37 @@ export const useStore = create<AppState>((setState, getState) => ({
     const capture: DeletedCapture = { workspaceId: id, path, isDir: false, files: [] };
     try {
       const tree = await get<FileNode>(`/workspaces/${id}/tree`);
-      const find = (n: FileNode): FileNode | null => (n.path === path ? n : n.children?.map(find).find(Boolean) ?? null);
+      const find = (n: FileNode): FileNode | null =>
+        n.path === path ? n : (n.children?.map(find).find(Boolean) ?? null);
       const node = find(tree);
       if (node?.type === 'dir') {
         capture.isDir = true;
-        const flatten = (n: FileNode): string[] => (n.type === 'file' ? [n.path] : (n.children ?? []).flatMap(flatten));
+        const flatten = (n: FileNode): string[] =>
+          n.type === 'file' ? [n.path] : (n.children ?? []).flatMap(flatten);
         const rels = node.path ? flatten(node) : [];
         for (const rel of rels.slice(0, 200)) {
-          try { capture.files.push({ path: rel, content: await get<{ content: string }>(`/workspaces/${id}/file?path=${encodeURIComponent(rel)}`).then((r) => r.content) }); } catch { /* skip */ }
+          try {
+            capture.files.push({
+              path: rel,
+              content: await get<{ content: string }>(
+                `/workspaces/${id}/file?path=${encodeURIComponent(rel)}`,
+              ).then((r) => r.content),
+            });
+          } catch {
+            /* skip */
+          }
         }
       } else {
-        capture.files.push({ path, content: await get<{ content: string }>(`/workspaces/${id}/file?path=${encodeURIComponent(path)}`).then((r) => r.content) });
+        capture.files.push({
+          path,
+          content: await get<{ content: string }>(
+            `/workspaces/${id}/file?path=${encodeURIComponent(path)}`,
+          ).then((r) => r.content),
+        });
       }
-    } catch { /* capture failed — Undo unavailable */ }
+    } catch {
+      /* capture failed — Undo unavailable */
+    }
 
     await del(`/workspaces/${id}/file?path=${encodeURIComponent(path)}`);
     const st = getState();
@@ -562,7 +665,10 @@ export const useStore = create<AppState>((setState, getState) => ({
     const fileContents = { ...st.fileContents };
     delete fileContents[path];
     if (victim) st.closeTab(victim.id);
-    setState({ fileContents, dirtyFiles: (Array.isArray(st.dirtyFiles) ? st.dirtyFiles : []).filter((p) => p !== path) });
+    setState({
+      fileContents,
+      dirtyFiles: (Array.isArray(st.dirtyFiles) ? st.dirtyFiles : []).filter((p) => p !== path),
+    });
     await getState().refreshTree();
 
     if (capture.files.length) {
@@ -571,7 +677,11 @@ export const useStore = create<AppState>((setState, getState) => ({
         const wid = capture.workspaceId;
         if (getState().workspaces.find((w) => w.id === wid)) {
           for (const f of capture.files) {
-            try { await post(`/workspaces/${wid}/file`, { path: f.path, content: f.content }); } catch { /* gone */ }
+            try {
+              await post(`/workspaces/${wid}/file`, { path: f.path, content: f.content });
+            } catch {
+              /* gone */
+            }
           }
           if (getState().workspaceId === wid) await getState().refreshTree();
         }
@@ -580,7 +690,12 @@ export const useStore = create<AppState>((setState, getState) => ({
   },
 
   showToast: (message, undo) => {
-    const toast: Toast = { id: Math.random().toString(36).slice(2, 10), message, undo, ts: Date.now() };
+    const toast: Toast = {
+      id: Math.random().toString(36).slice(2, 10),
+      message,
+      undo,
+      ts: Date.now(),
+    };
     setState({ toasts: [...getState().toasts.slice(-3), toast] });
     setTimeout(() => getState().dismissToast(toast.id), 6000);
   },
@@ -591,12 +706,18 @@ export const useStore = create<AppState>((setState, getState) => ({
 
   loadSettings: async () => {
     const settings = await get<AppSettings>('/settings');
-    setState({ settings, chatModel: settings.omni.modelPrefs.chat ?? settings.omni.modelPrefs.coding ?? '' });
+    setState({
+      settings,
+      chatModel: settings.omni.modelPrefs.chat ?? settings.omni.modelPrefs.coding ?? '',
+    });
   },
 
   saveSettings: async (s) => {
     const settings = await put<AppSettings>('/settings', s);
-    setState({ settings, chatModel: settings.omni.modelPrefs.chat ?? settings.omni.modelPrefs.coding ?? '' });
+    setState({
+      settings,
+      chatModel: settings.omni.modelPrefs.chat ?? settings.omni.modelPrefs.coding ?? '',
+    });
   },
 
   refreshModels: async () => {
@@ -604,12 +725,21 @@ export const useStore = create<AppState>((setState, getState) => ({
       // Selectable list = routing aliases + inferred-free chat-capable models.
       const sel = await get<{ connected: boolean; models: ModelInfo[] }>('/models/selectable');
       const models = sel.models ?? [];
-      setState({ omniConnected: sel.connected, models, omniError: sel.connected ? null : 'Model gateway unreachable — AI features disabled until it responds.' });
+      setState({
+        omniConnected: sel.connected,
+        models,
+        omniError: sel.connected
+          ? null
+          : 'Model gateway unreachable — AI features disabled until it responds.',
+      });
       // Keep any existing selection that is still offered; otherwise default
       // to '' (Auto → the server-side router picks per task).
       const keep = (cur: string) => (models.some((m) => m.id === cur) ? cur : '');
       if (sel.connected) {
-        setState({ selectedModel: keep(getState().selectedModel), chatModel: keep(getState().chatModel) });
+        setState({
+          selectedModel: keep(getState().selectedModel),
+          chatModel: keep(getState().chatModel),
+        });
       }
     } catch (e) {
       setState({ omniConnected: false, omniError: e instanceof Error ? e.message : String(e) });
@@ -622,12 +752,19 @@ export const useStore = create<AppState>((setState, getState) => ({
       try {
         const r = await get<{ models: CatalogEntry[] }>('/models/all');
         setState({ allModels: r.models ?? [] });
-      } catch { /* picker falls back to the selectable list */ }
+      } catch {
+        /* picker falls back to the selectable list */
+      }
     }
   },
 
   newChat: () => {
-    const session: ChatSession = { id: Math.random().toString(36).slice(2, 10), title: 'New chat', messages: [], createdAt: Date.now() };
+    const session: ChatSession = {
+      id: Math.random().toString(36).slice(2, 10),
+      title: 'New chat',
+      messages: [],
+      createdAt: Date.now(),
+    };
     // A new chat clears the panel completely: no stale run artifacts, no
     // live badge, no leftover stream text or status line from the old thread.
     setState({
@@ -646,14 +783,18 @@ export const useStore = create<AppState>((setState, getState) => ({
     // Returning to a session re-binds its task (if any) so the live badge
     // and stream follow the conversation you're actually looking at.
     const session = getState().chatSessions.find((s) => s.id === id);
-    const boundTask = [...(session?.messages ?? [])].reverse().find((m) => m.taskId)?.taskId ?? null;
+    const boundTask =
+      [...(session?.messages ?? [])].reverse().find((m) => m.taskId)?.taskId ?? null;
     setState({ activeChatId: id, ...(boundTask ? { activeTaskId: boundTask } : {}) });
   },
 
   deleteChat: (id) => {
     const st = getState();
     const sessions = st.chatSessions.filter((s) => s.id !== id);
-    setState({ chatSessions: sessions, activeChatId: st.activeChatId === id ? sessions[0]?.id ?? null : st.activeChatId });
+    setState({
+      chatSessions: sessions,
+      activeChatId: st.activeChatId === id ? (sessions[0]?.id ?? null) : st.activeChatId,
+    });
   },
 
   sendChat: async (content, attachments) => {
@@ -668,22 +809,46 @@ export const useStore = create<AppState>((setState, getState) => ({
     const skills = getState().skills;
     let invokedSkill: ChatMessage['skillInvocation'];
     if (invocation) {
-      const sk = skills.find((s) => s.id.toLowerCase() === invocation.skillId.toLowerCase())
-        ?? skills.find((s) => s.name.toLowerCase().replace(/\s+/g, '-') === invocation.skillId.toLowerCase());
+      const sk =
+        skills.find((s) => s.id.toLowerCase() === invocation.skillId.toLowerCase()) ??
+        skills.find(
+          (s) => s.name.toLowerCase().replace(/\s+/g, '-') === invocation.skillId.toLowerCase(),
+        );
       if (sk?.enabled) {
         invokedSkill = { id: sk.id, name: sk.name };
         content = invocation.rest || `Using the ${sk.name} skill, respond to this in context.`;
       } else {
         // Disabled or unknown skills are not callable — say so inline.
-        getState().showToast(sk ? `Skill "${sk.name}" is disabled — enable it in the Skills panel to call it.` : `No skill "/${invocation.skillId}" in this project.`);
+        getState().showToast(
+          sk
+            ? `Skill "${sk.name}" is disabled — enable it in the Skills panel to call it.`
+            : `No skill "/${invocation.skillId}" in this project.`,
+        );
       }
     }
-    const userMsg: ChatMessage = { id: Math.random().toString(36).slice(2), role: 'user', content, ts: Date.now(), attachments, skillInvocation: invokedSkill };
-    const assistantMsg: ChatMessage = { id: Math.random().toString(36).slice(2), role: 'assistant', content: '', ts: Date.now(), pending: true };
+    const userMsg: ChatMessage = {
+      id: Math.random().toString(36).slice(2),
+      role: 'user',
+      content,
+      ts: Date.now(),
+      attachments,
+      skillInvocation: invokedSkill,
+    };
+    const assistantMsg: ChatMessage = {
+      id: Math.random().toString(36).slice(2),
+      role: 'assistant',
+      content: '',
+      ts: Date.now(),
+      pending: true,
+    };
     setState({
       chatSessions: getState().chatSessions.map((s) =>
         s.id === activeId
-          ? { ...s, messages: [...s.messages, userMsg, assistantMsg], title: s.messages.length === 0 ? content.slice(0, 40) : s.title }
+          ? {
+              ...s,
+              messages: [...s.messages, userMsg, assistantMsg],
+              title: s.messages.length === 0 ? content.slice(0, 40) : s.title,
+            }
           : s,
       ),
       chatStreaming: true,
@@ -692,13 +857,23 @@ export const useStore = create<AppState>((setState, getState) => ({
     });
 
     const session = getState().chatSessions.find((s) => s.id === activeId)!;
-    const history = session.messages.filter((m) => !m.pending && m.content).slice(-20).map((m) => ({ role: m.role, content: m.content }));
+    const history = session.messages
+      .filter((m) => !m.pending && m.content)
+      .slice(-20)
+      .map((m) => ({ role: m.role, content: m.content }));
 
     const updateAssistant = (text: string, done: boolean, error = false) => {
       setState({
         chatSessions: getState().chatSessions.map((s) =>
           s.id === activeId
-            ? { ...s, messages: s.messages.map((m) => (m.id === assistantMsg.id ? { ...m, content: text, pending: !done, error: error || m.error } : m)) }
+            ? {
+                ...s,
+                messages: s.messages.map((m) =>
+                  m.id === assistantMsg.id
+                    ? { ...m, content: text, pending: !done, error: error || m.error }
+                    : m,
+                ),
+              }
             : s,
         ),
         chatStreaming: !done && getState().chatStreaming,
@@ -743,10 +918,15 @@ export const useStore = create<AppState>((setState, getState) => ({
             } else if (payload.type === 'error') {
               throw new Error(payload.error);
             } else if (payload.type === 'model') {
-              setStatus({ kind: 'degraded', reason: `Routed to fallback model ${payload.model}`, ts: Date.now() });
+              setStatus({
+                kind: 'degraded',
+                reason: `Routed to fallback model ${payload.model}`,
+                ts: Date.now(),
+              });
             }
           } catch (parseErr) {
-            if (parseErr instanceof Error && parseErr.message !== 'Unexpected end of JSON input') throw parseErr;
+            if (parseErr instanceof Error && parseErr.message !== 'Unexpected end of JSON input')
+              throw parseErr;
           }
         }
       }
@@ -765,7 +945,13 @@ export const useStore = create<AppState>((setState, getState) => ({
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (attempt < MAX_ATTEMPTS) {
-          setStatus({ kind: 'retrying', reason: msg, attempt, maxAttempts: MAX_ATTEMPTS, ts: Date.now() });
+          setStatus({
+            kind: 'retrying',
+            reason: msg,
+            attempt,
+            maxAttempts: MAX_ATTEMPTS,
+            ts: Date.now(),
+          });
           await new Promise((r) => setTimeout(r, 800 * attempt));
         } else {
           setStatus(null);
@@ -787,12 +973,28 @@ export const useStore = create<AppState>((setState, getState) => ({
       st.newChat();
       activeId = getState().activeChatId;
     }
-    const userMsg: ChatMessage = { id: Math.random().toString(36).slice(2), role: 'user', content: prompt, ts: Date.now() };
-    const assistantMsg: ChatMessage = { id: Math.random().toString(36).slice(2), role: 'assistant', content: '', ts: Date.now(), pending: true };
+    const userMsg: ChatMessage = {
+      id: Math.random().toString(36).slice(2),
+      role: 'user',
+      content: prompt,
+      ts: Date.now(),
+    };
+    const assistantMsg: ChatMessage = {
+      id: Math.random().toString(36).slice(2),
+      role: 'assistant',
+      content: '',
+      ts: Date.now(),
+      pending: true,
+    };
     setState({
       chatSessions: getState().chatSessions.map((s) =>
         s.id === activeId
-          ? { ...s, messages: [...s.messages, userMsg, assistantMsg], title: s.messages.length === 0 ? prompt.replace(/^\[PLAN\] /, '').slice(0, 40) : s.title }
+          ? {
+              ...s,
+              messages: [...s.messages, userMsg, assistantMsg],
+              title:
+                s.messages.length === 0 ? prompt.replace(/^\[PLAN\] /, '').slice(0, 40) : s.title,
+            }
           : s,
       ),
     });
@@ -802,7 +1004,12 @@ export const useStore = create<AppState>((setState, getState) => ({
       workspaceId: st.workspaceId,
       model: st.chatModel || st.selectedModel,
     });
-    setState({ tasks: [task, ...st.tasks], activeTaskId: task.id, chatTaskId: task.id, agentStream: { ...st.agentStream, [task.id]: '' } });
+    setState({
+      tasks: [task, ...st.tasks],
+      activeTaskId: task.id,
+      chatTaskId: task.id,
+      agentStream: { ...st.agentStream, [task.id]: '' },
+    });
   },
 
   loadTasks: async () => {
@@ -815,12 +1022,19 @@ export const useStore = create<AppState>((setState, getState) => ({
         for (const t of tasks) {
           if (t.status !== 'running') continue;
           try {
-            const ss = await get<{ status: string; buffer: string }>(`/agent/tasks/${t.id}/stream-state`);
-            if (ss.buffer) setState((s2) => ({ agentStream: { ...s2.agentStream, [t.id]: ss.buffer } }));
-          } catch { /* task may have finished between list and fetch */ }
+            const ss = await get<{ status: string; buffer: string }>(
+              `/agent/tasks/${t.id}/stream-state`,
+            );
+            if (ss.buffer)
+              setState((s2) => ({ agentStream: { ...s2.agentStream, [t.id]: ss.buffer } }));
+          } catch {
+            /* task may have finished between list and fetch */
+          }
         }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   },
 
   loadMemory: async () => {
@@ -829,7 +1043,9 @@ export const useStore = create<AppState>((setState, getState) => ({
     try {
       const memory = await get<MemoryEntry[]>(`/workspaces/${id}/memory`);
       setState({ memory });
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   },
 
   addMemory: async (text) => {
@@ -888,21 +1104,29 @@ export const useStore = create<AppState>((setState, getState) => ({
     try {
       const context = await get<ContextReport>('/context');
       setState({ context });
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   },
 
   refreshHealth: async () => {
     try {
-      const health = await get<{ models: Record<string, { status: string; lastChecked: number; lastError?: string }> }>('/health/models');
+      const health = await get<{
+        models: Record<string, { status: string; lastChecked: number; lastError?: string }>;
+      }>('/health/models');
       setState({ modelHealth: health.models ?? {} });
-    } catch { /* health endpoint unreachable — leave last known */ }
+    } catch {
+      /* health endpoint unreachable — leave last known */
+    }
   },
 
   refreshSkills: async () => {
     // Skills are scoped to the project folder: the effective enabled set is
     // per-workspace, so pass the active workspace id when we have one.
     const wsId = getState().workspaceId;
-    const skills = await get<Skill[]>(`/skills${wsId ? `?workspaceId=${encodeURIComponent(wsId)}` : ''}`);
+    const skills = await get<Skill[]>(
+      `/skills${wsId ? `?workspaceId=${encodeURIComponent(wsId)}` : ''}`,
+    );
     setState({ skills });
   },
 
@@ -938,7 +1162,16 @@ export const useStore = create<AppState>((setState, getState) => ({
     const dirtyCount = Array.isArray(dirty) ? dirty.length : dirty.size;
     if (!id) return { branch: '', files: [], dirtyCount };
     try {
-      const r = await get<{ current: string; files: { path: string; status: string; additions: number; deletions: number; hunks: import('../../shared/types').DiffHunk[] }[] }>(`/workspaces/${id}/git/review`);
+      const r = await get<{
+        current: string;
+        files: {
+          path: string;
+          status: string;
+          additions: number;
+          deletions: number;
+          hunks: import('../../shared/types').DiffHunk[];
+        }[];
+      }>(`/workspaces/${id}/git/review`);
       return { branch: r.current, files: r.files, dirtyCount };
     } catch {
       return { branch: '', files: [], dirtyCount };

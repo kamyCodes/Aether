@@ -18,7 +18,11 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': { target: `http://${LOOPBACK_HOST}:${serverPort}`, changeOrigin: true },
         '/ws': { target: `ws://${LOOPBACK_HOST}:${serverPort}`, ws: true },
-        '/omni': { target: `http://${LOOPBACK_HOST}:${OMNI_PORT}`, changeOrigin: true, rewrite: (p) => p.replace(/^\/omni/, '') },
+        '/omni': {
+          target: `http://${LOOPBACK_HOST}:${OMNI_PORT}`,
+          changeOrigin: true,
+          rewrite: (p) => p.replace(/^\/omni/, ''),
+        },
       },
     },
   };

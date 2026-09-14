@@ -3,7 +3,10 @@ import { FolderOpen, X } from 'lucide-react';
 import { useDialogs, alertDialog } from '../lib/dialogs';
 import { useStore } from '../lib/store';
 
-async function pickNative(startDir: string | undefined, mode: 'folder' | 'file'): Promise<{ dir: string | null; file: string | null }> {
+async function pickNative(
+  startDir: string | undefined,
+  mode: 'folder' | 'file',
+): Promise<{ dir: string | null; file: string | null }> {
   // Tag this window's title with a one-time marker so the backend can find
   // our window handle (EnumWindows) and own the native dialog to it — this
   // keeps the picker on top of Aether even if another app took focus.
@@ -33,7 +36,10 @@ async function pickNative(startDir: string | undefined, mode: 'folder' | 'file')
 export async function openFileWithNativePicker(): Promise<void> {
   const wsId = useStore.getState().workspaceId;
   if (!wsId) {
-    await alertDialog('No workspace open', 'Open a workspace folder first, then pick a file inside it.');
+    await alertDialog(
+      'No workspace open',
+      'Open a workspace folder first, then pick a file inside it.',
+    );
     return;
   }
   const wsRoot = useStore.getState().workspaces.find((w) => w.id === wsId)?.root;
@@ -68,7 +74,9 @@ export function Dialogs() {
           <div className="modal" style={{ width: 460 }} onMouseDown={(e) => e.stopPropagation()}>
             <div className="panel-header">{prompt.opts.title}</div>
             <div className="settings-form" style={{ padding: '16px 18px', gap: 12 }}>
-              {prompt.opts.message && <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{prompt.opts.message}</div>}
+              {prompt.opts.message && (
+                <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{prompt.opts.message}</div>
+              )}
               <input
                 ref={inputRef}
                 value={value}
@@ -95,18 +103,24 @@ export function Dialogs() {
                     <FolderOpen size={13} /> {picking ? 'Waiting for picker…' : 'Browse…'}
                   </button>
                   {picking && (
-                    <span className="picker-status">Opening system dialog — pick a folder or cancel to return here…</span>
+                    <span className="picker-status">
+                      Opening system dialog — pick a folder or cancel to return here…
+                    </span>
                   )}
                 </div>
               )}
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button onClick={() => closePrompt(null)}>{prompt.opts.cancelLabel ?? 'Cancel'}</button>
+                <button onClick={() => closePrompt(null)}>
+                  {prompt.opts.cancelLabel ?? 'Cancel'}
+                </button>
                 <button className="primary" onClick={() => closePrompt(value.trim() || null)}>
                   {prompt.opts.confirmLabel ?? 'OK'}
                 </button>
               </div>
             </div>
-            <button className="modal-close" onClick={() => closePrompt(null)}><X size={13} /></button>
+            <button className="modal-close" onClick={() => closePrompt(null)}>
+              <X size={13} />
+            </button>
           </div>
         </div>
       )}
@@ -116,19 +130,29 @@ export function Dialogs() {
           <div className="modal" style={{ width: 420 }} onMouseDown={(e) => e.stopPropagation()}>
             <div className="panel-header">{confirm.opts.title}</div>
             <div className="settings-form" style={{ padding: '16px 18px', gap: 12 }}>
-              {confirm.opts.message && <div style={{ fontSize: 12.5, lineHeight: 1.55 }}>{confirm.opts.message}</div>}
+              {confirm.opts.message && (
+                <div style={{ fontSize: 12.5, lineHeight: 1.55 }}>{confirm.opts.message}</div>
+              )}
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button onClick={() => closeConfirm(false)}>{confirm.opts.cancelLabel ?? 'Cancel'}</button>
+                <button onClick={() => closeConfirm(false)}>
+                  {confirm.opts.cancelLabel ?? 'Cancel'}
+                </button>
                 <button
                   className={confirm.opts.danger ? 'primary' : 'primary'}
-                  style={confirm.opts.danger ? { background: 'var(--err)', borderColor: 'transparent' } : undefined}
+                  style={
+                    confirm.opts.danger
+                      ? { background: 'var(--err)', borderColor: 'transparent' }
+                      : undefined
+                  }
                   onClick={() => closeConfirm(true)}
                 >
                   {confirm.opts.confirmLabel ?? 'Confirm'}
                 </button>
+              </div>
             </div>
-            </div>
-            <button className="modal-close" onClick={() => closeConfirm(false)}><X size={13} /></button>
+            <button className="modal-close" onClick={() => closeConfirm(false)}>
+              <X size={13} />
+            </button>
           </div>
         </div>
       )}
@@ -138,12 +162,18 @@ export function Dialogs() {
           <div className="modal" style={{ width: 400 }} onMouseDown={(e) => e.stopPropagation()}>
             <div className="panel-header">{alertMsg.title}</div>
             <div className="settings-form" style={{ padding: '16px 18px', gap: 12 }}>
-              {alertMsg.message && <div style={{ fontSize: 12.5, lineHeight: 1.55 }}>{alertMsg.message}</div>}
+              {alertMsg.message && (
+                <div style={{ fontSize: 12.5, lineHeight: 1.55 }}>{alertMsg.message}</div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button className="primary" onClick={closeAlert}>OK</button>
+                <button className="primary" onClick={closeAlert}>
+                  OK
+                </button>
               </div>
             </div>
-            <button className="modal-close" onClick={closeAlert}><X size={13} /></button>
+            <button className="modal-close" onClick={closeAlert}>
+              <X size={13} />
+            </button>
           </div>
         </div>
       )}

@@ -53,7 +53,9 @@ export function mountGlassInteractions(): () => void {
      indicator visuals. */
   const SEG_CONTAINER = '.segmented, .mode-toggle';
   const onSegClick = (e: MouseEvent) => {
-    const seg = (e.target as Element | null)?.closest?.('.segmented > .segment, .mode-toggle > button');
+    const seg = (e.target as Element | null)?.closest?.(
+      '.segmented > .segment, .mode-toggle > button',
+    );
     if (!seg || isButtonDisabled(seg)) return;
     const container = seg.closest(SEG_CONTAINER);
     if (!container) return;
@@ -68,7 +70,9 @@ export function mountGlassInteractions(): () => void {
     const parentRect = container.getBoundingClientRect();
     indicator.style.width = segRect.width + 'px';
     indicator.style.transform = 'translateX(' + (segRect.left - parentRect.left) + 'px)';
-    container.querySelectorAll('.segment, .mode-toggle > button').forEach((s) => s.classList.toggle('active', s === target));
+    container
+      .querySelectorAll('.segment, .mode-toggle > button')
+      .forEach((s) => s.classList.toggle('active', s === target));
     if (squish) {
       fill.classList.remove('morphing');
       void fill.offsetWidth; // restart the squish keyframe
@@ -97,13 +101,15 @@ export function mountGlassInteractions(): () => void {
       const dist = Math.abs(e.clientX - (r.left + r.width / 2));
       const maxDist = 140;
       const t = Math.max(0, 1 - dist / maxDist);
-      icon.style.transform = 'translateY(' + (-18 * t) + 'px) scale(' + (1 + 0.7 * t) + ')';
+      icon.style.transform = 'translateY(' + -18 * t + 'px) scale(' + (1 + 0.7 * t) + ')';
     });
   };
   const onDockLeave = (e: MouseEvent) => {
     const dock = (e.target as Element | null)?.closest?.('.dock');
     if (!dock) return;
-    dock.querySelectorAll<HTMLElement>('.dock-icon').forEach((icon) => { icon.style.transform = ''; });
+    dock.querySelectorAll<HTMLElement>('.dock-icon').forEach((icon) => {
+      icon.style.transform = '';
+    });
   };
 
   document.addEventListener('mousemove', onGlowMove, { passive: true });

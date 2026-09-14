@@ -8,20 +8,45 @@ import { GlassButton, GlassDropdown, GlassSegmentedControl, GlassToggle } from '
  * Slash-menu: typing `/` at the start of the composer offers the enabled
  * skills for this project. Picking one replaces the draft with `/skill-id `.
  */
-function SkillSlashMenu({ text, onPick, onClose }: { text: string; onPick: (id: string) => void; onClose: () => void }) {
+function SkillSlashMenu({
+  text,
+  onPick,
+  onClose,
+}: {
+  text: string;
+  onPick: (id: string) => void;
+  onClose: () => void;
+}) {
   const skills = useStore((s) => s.skills);
   const slashQuery = text.replace(/^\//, '').toLowerCase();
   const matches = skills
     .filter((s) => s.enabled)
-    .filter((s) => !slashQuery || s.id.toLowerCase().includes(slashQuery) || s.name.toLowerCase().includes(slashQuery))
+    .filter(
+      (s) =>
+        !slashQuery ||
+        s.id.toLowerCase().includes(slashQuery) ||
+        s.name.toLowerCase().includes(slashQuery),
+    )
     .slice(0, 8);
   if (!text.startsWith('/')) return null;
   return (
     <div className="ac-skill-menu fade-in" role="listbox" aria-label="Enabled skills">
       <div className="ac-skill-menu-head">/skills — enabled for this project</div>
-      {matches.length === 0 && <div className="ac-skill-item" style={{ cursor: 'default' }}>No enabled skills match “{slashQuery}”</div>}
+      {matches.length === 0 && (
+        <div className="ac-skill-item" style={{ cursor: 'default' }}>
+          No enabled skills match “{slashQuery}”
+        </div>
+      )}
       {matches.map((s) => (
-        <button key={s.id} className="ac-skill-item" onClick={() => { onPick(s.id); onClose(); }} title={s.description}>
+        <button
+          key={s.id}
+          className="ac-skill-item"
+          onClick={() => {
+            onPick(s.id);
+            onClose();
+          }}
+          title={s.description}
+        >
           <Zap size={11} />
           <span className="ac-skill-item-name">/{s.id}</span>
           <span className="ac-skill-item-desc">{s.description}</span>
@@ -57,7 +82,8 @@ export function Composer() {
       useStore.setState({ composerPrefill: '' });
     }
   }, [prefill]);
-  const mode = useStore((s) => s.composerMode); const setMode = (m: 'agent' | 'ask' | 'plan') => useStore.setState({ composerMode: m });
+  const mode = useStore((s) => s.composerMode);
+  const setMode = (m: 'agent' | 'ask' | 'plan') => useStore.setState({ composerMode: m });
 
   // The Zap button in the chat header dispatches this to open the skill menu;
   // seed the composer with "/" so the menu appears immediately.
@@ -69,9 +95,15 @@ export function Composer() {
     window.addEventListener('aether:open-skill-menu', onSkillPick);
     return () => window.removeEventListener('aether:open-skill-menu', onSkillPick);
   }, []);
-  const chatModel = useStore((s) => s.chatModel); const models = useStore((s) => s.models);
-  const allModels = useStore((s) => s.allModels); const showAll = useStore((s) => s.showAllModels); const toggleShowAll = useStore((s) => s.toggleShowAllModels);
-  const chatStreaming = useStore((s) => s.chatStreaming); const busyTask = useStore((s) => s.tasks.some((t) => t.status === 'running' || t.status === 'planning' || t.status === 'queued'));
+  const chatModel = useStore((s) => s.chatModel);
+  const models = useStore((s) => s.models);
+  const allModels = useStore((s) => s.allModels);
+  const showAll = useStore((s) => s.showAllModels);
+  const toggleShowAll = useStore((s) => s.toggleShowAllModels);
+  const chatStreaming = useStore((s) => s.chatStreaming);
+  const busyTask = useStore((s) =>
+    s.tasks.some((t) => t.status === 'running' || t.status === 'planning' || t.status === 'queued'),
+  );
   const busy = chatStreaming || busyTask;
   const taskAction = useStore((s) => s.taskAction);
   const modelHealth = useStore((s) => s.modelHealth);
@@ -80,9 +112,19 @@ export function Composer() {
   const autoHealth = modelHealth['auto/coding:free'];
   const pickedHealth = chatModel ? healthFor(chatModel) : autoHealth;
   // A cancellable task is one the backend can actually stop (running/planning).
-  const liveTaskId = useStore((s) => s.tasks.find((t) => t.status === 'running' || t.status === 'planning' || t.status === 'queued')?.id);
+  const liveTaskId = useStore(
+    (s) =>
+      s.tasks.find(
+        (t) => t.status === 'running' || t.status === 'planning' || t.status === 'queued',
+      )?.id,
+  );
 
-  const placeholder = mode === 'agent' ? 'Describe a task for the agent… (Enter to run, Shift+Enter for newline)' : mode === 'plan' ? 'Describe what to plan — no files will be modified…' : 'Ask anything about the codebase…';
+  const placeholder =
+    mode === 'agent'
+      ? 'Describe a task for the agent… (Enter to run, Shift+Enter for newline)'
+      : mode === 'plan'
+        ? 'Describe what to plan — no files will be modified…'
+        : 'Ask anything about the codebase…';
 
   function send() {
     const t = text.trim();
@@ -91,7 +133,16 @@ export function Composer() {
       void useStore.getState().sendChat(t, attachments.length ? [...attachments] : undefined);
     } else {
       const prefix = mode === 'plan' ? '[PLAN] ' : '';
-      void useStore.getState().startTask(prefix + t + (attachments.length ? `\n\n(attachments: ${attachments.map((a) => a.name).join(', ')})` : ''), mode);
+      void useStore
+        .getState()
+        .startTask(
+          prefix +
+            t +
+            (attachments.length
+              ? `\n\n(attachments: ${attachments.map((a) => a.name).join(', ')})`
+              : ''),
+          mode,
+        );
     }
     setText('');
     setAttachments([]);
@@ -101,10 +152,18 @@ export function Composer() {
     for (const f of Array.from(files ?? []).slice(0, 5)) {
       const reader = new FileReader();
       const isImage = f.type.startsWith('image/');
-      reader.onload = () => setAttachments((a) => [...a, { name: f.name, type: f.type, dataUrl: isImage ? String(reader.result) : undefined }]);
+      reader.onload = () =>
+        setAttachments((a) => [
+          ...a,
+          { name: f.name, type: f.type, dataUrl: isImage ? String(reader.result) : undefined },
+        ]);
       if (isImage) reader.readAsDataURL(f);
       else {
-        reader.onload = () => setAttachments((a) => [...a, { name: f.name, type: f.type, text: String(reader.result).slice(0, 8000) }]);
+        reader.onload = () =>
+          setAttachments((a) => [
+            ...a,
+            { name: f.name, type: f.type, text: String(reader.result).slice(0, 8000) },
+          ]);
         reader.readAsText(f);
       }
     }
@@ -118,20 +177,33 @@ export function Composer() {
             <span key={i} className="attachment-chip">
               {a.dataUrl && <img src={a.dataUrl} alt={a.name} />}
               {a.name}
-              <span className="close" onClick={() => setAttachments((arr) => arr.filter((_, j) => j !== i))}>×</span>
+              <span
+                className="close"
+                onClick={() => setAttachments((arr) => arr.filter((_, j) => j !== i))}
+              >
+                ×
+              </span>
             </span>
           ))}
         </div>
       )}
-      {text.startsWith('/') && <SkillSlashMenu text={text} onPick={(id) => setText(`/${id} `)} onClose={() => {}} />}
+      {text.startsWith('/') && (
+        <SkillSlashMenu text={text} onPick={(id) => setText(`/${id} `)} onClose={() => {}} />
+      )}
       <textarea
         ref={textareaRef}
         value={text}
         placeholder={placeholder}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Escape' && text.startsWith('/')) { setText(''); return; }
-          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+          if (e.key === 'Escape' && text.startsWith('/')) {
+            setText('');
+            return;
+          }
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            send();
+          }
         }}
       />
       <div className="composer-row">
@@ -145,9 +217,19 @@ export function Composer() {
           onValueChange={(v) => {
             const s = useStore.getState().settings;
             if (!s) return;
-            void useStore.getState().saveSettings({ ...s, agent: { autonomy: { ...s.agent.autonomy, mode: v as typeof s.agent.autonomy.mode } } });
+            void useStore
+              .getState()
+              .saveSettings({
+                ...s,
+                agent: {
+                  autonomy: { ...s.agent.autonomy, mode: v as typeof s.agent.autonomy.mode },
+                },
+              });
           }}
-          options={Object.entries(AUTONOMY_LABELS).map(([v, label]) => ({ value: v, label: label.split(' — ')[0] }))}
+          options={Object.entries(AUTONOMY_LABELS).map(([v, label]) => ({
+            value: v,
+            label: label.split(' — ')[0],
+          }))}
           title="Autonomy level — how much the agent can do without asking"
           ariaLabel="Autonomy level"
         />
@@ -161,26 +243,47 @@ export function Composer() {
           value={mode}
           onValueChange={(v) => setMode(v as 'agent' | 'ask' | 'plan')}
           options={[
-            { value: 'agent', label: 'Agent', title: 'Agent — autonomous, can edit files and run commands' },
-            { value: 'ask', label: 'Ask', title: 'Ask — answer questions about the code, no edits' },
-            { value: 'plan', label: 'Plan', title: 'Plan — produce a plan without modifying anything' },
+            {
+              value: 'agent',
+              label: 'Agent',
+              title: 'Agent — autonomous, can edit files and run commands',
+            },
+            {
+              value: 'ask',
+              label: 'Ask',
+              title: 'Ask — answer questions about the code, no edits',
+            },
+            {
+              value: 'plan',
+              label: 'Plan',
+              title: 'Plan — produce a plan without modifying anything',
+            },
           ]}
         />
         {/* Health dot: last background-probe result for the effective model. */}
         {(() => {
           const h = pickedHealth;
-          const cls = !h || h.status === 'unknown' ? 'unknown' : h.status === 'healthy' ? 'ok' : 'failing';
-          const tip = !h || h.status === 'unknown'
-            ? 'Health: not yet checked (background probe runs every 10 min)'
-            : h.status === 'healthy'
-              ? 'Health: OK (last probe succeeded)'
-              : `Health: FAILING — ${h.lastError ?? 'recent probes failed'}. Auto-routing will skip it while it cools down.`;
+          const cls =
+            !h || h.status === 'unknown' ? 'unknown' : h.status === 'healthy' ? 'ok' : 'failing';
+          const tip =
+            !h || h.status === 'unknown'
+              ? 'Health: not yet checked (background probe runs every 10 min)'
+              : h.status === 'healthy'
+                ? 'Health: OK (last probe succeeded)'
+                : `Health: FAILING — ${h.lastError ?? 'recent probes failed'}. Auto-routing will skip it while it cools down.`;
           return <span className={`model-health-dot ${cls}`} title={tip} />;
         })()}
         {/* Liquid Glass: Radix Switch — role=switch + Space/Enter keyboard
             toggling replace the visually-hidden checkbox hack. */}
-        <span className="show-all-models" title="Show every model in the gateway catalog, grouped by provider">
-          <GlassToggle checked={showAll} onCheckedChange={(v) => void toggleShowAll(v)} label="Show all models" />
+        <span
+          className="show-all-models"
+          title="Show every model in the gateway catalog, grouped by provider"
+        >
+          <GlassToggle
+            checked={showAll}
+            onCheckedChange={(v) => void toggleShowAll(v)}
+            label="Show all models"
+          />
           all
         </span>
         {showAll ? (
@@ -195,7 +298,8 @@ export function Composer() {
             title="Full catalog — grouped by provider. ✓ = provider is working (backed by your keys or with successful usage); (free) = inferred free; (paid) = unknown/paid"
             ariaLabel="Model"
             groups={(() => {
-              if (!allModels) return [{ label: 'Loading', options: [{ value: '', label: 'loading catalog…' }] }];
+              if (!allModels)
+                return [{ label: 'Loading', options: [{ value: '', label: 'loading catalog…' }] }];
               const byProvider = new Map<string, typeof allModels>();
               for (const m of allModels) {
                 const list = byProvider.get(m.provider) ?? [];
@@ -203,7 +307,11 @@ export function Composer() {
                 byProvider.set(m.provider, list);
               }
               return [...byProvider.entries()]
-                .sort((a, b) => (b[1].some((x) => x.working) ? 1 : 0) - (a[1].some((x) => x.working) ? 1 : 0) || a[0].localeCompare(b[0]))
+                .sort(
+                  (a, b) =>
+                    (b[1].some((x) => x.working) ? 1 : 0) - (a[1].some((x) => x.working) ? 1 : 0) ||
+                    a[0].localeCompare(b[0]),
+                )
                 .map(([provider, list]) => ({
                   label: `${provider}${list.some((x) => x.working) ? ' ✓' : ''}`,
                   options: list.map((m) => ({
@@ -222,16 +330,36 @@ export function Composer() {
             title="Model — Auto lets the agent route to the best free model per task; other options are routing aliases or inferred-free models from OmniRoute"
             ariaLabel="Model"
             groups={[
-              { label: 'Routing aliases', options: models.filter((m) => m.routingAlias).map((m) => ({ value: m.id, label: m.id })) },
-              { label: 'Free models', options: models.filter((m) => !m.routingAlias).map((m) => ({ value: m.id, label: m.id })) },
+              {
+                label: 'Routing aliases',
+                options: models
+                  .filter((m) => m.routingAlias)
+                  .map((m) => ({ value: m.id, label: m.id })),
+              },
+              {
+                label: 'Free models',
+                options: models
+                  .filter((m) => !m.routingAlias)
+                  .map((m) => ({ value: m.id, label: m.id })),
+              },
             ]}
           />
         )}
-        <label className="composer-attach" title="Attach files (images or text)"><Paperclip size={13} /><input type="file" multiple style={{ display: 'none' }} onChange={(e) => onFiles(e.target.files)} /></label>
+        <label className="composer-attach" title="Attach files (images or text)">
+          <Paperclip size={13} />
+          <input
+            type="file"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(e) => onFiles(e.target.files)}
+          />
+        </label>
         {liveTaskId ? (
           <GlassButton
             className="primary send stop btn-glass glass"
-            onClick={() => { if (confirm('End the running task?')) void taskAction(liveTaskId, 'cancel'); }}
+            onClick={() => {
+              if (confirm('End the running task?')) void taskAction(liveTaskId, 'cancel');
+            }}
             title="End task — stop the agent and mark it cancelled"
           >
             <Square size={12} />
@@ -242,10 +370,24 @@ export function Composer() {
             className={`primary send${busy ? ' thinking' : ''} btn-glass glass`}
             disabled={!text.trim() || busy}
             onClick={send}
-            title={mode === 'agent' ? 'Run agent task' : mode === 'plan' ? 'Generate plan' : 'Send question'}
+            title={
+              mode === 'agent'
+                ? 'Run agent task'
+                : mode === 'plan'
+                  ? 'Generate plan'
+                  : 'Send question'
+            }
           >
             {busy ? <Square size={12} /> : <Send size={12} />}
-            <span className="send-label">{busy ? 'Working…' : mode === 'agent' ? 'Run Agent' : mode === 'plan' ? 'Plan' : 'Send'}</span>
+            <span className="send-label">
+              {busy
+                ? 'Working…'
+                : mode === 'agent'
+                  ? 'Run Agent'
+                  : mode === 'plan'
+                    ? 'Plan'
+                    : 'Send'}
+            </span>
           </GlassButton>
         )}
       </div>

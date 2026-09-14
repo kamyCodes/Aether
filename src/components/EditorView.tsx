@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import Editor, { useMonaco, type BeforeMount, type Monaco, type OnMount } from '@monaco-editor/react';
+import Editor, {
+  useMonaco,
+  type BeforeMount,
+  type Monaco,
+  type OnMount,
+} from '@monaco-editor/react';
 import { Loader2 } from 'lucide-react';
 import { useStore, type OpenTab } from '../lib/store';
 
@@ -8,7 +13,19 @@ import { useStore, type OpenTab } from '../lib/store';
  * always matches the app theme (dark / light / OLED true-black). Only core
  * vars are read — styles.css declares them as plain hex (no color-mix).
  */
-const THEME_VARS = ['--bg', '--bg-elev', '--text', '--text-dim', '--text-faint', '--accent', '--border', '--border-strong', '--ok', '--warn', '--err'] as const;
+const THEME_VARS = [
+  '--bg',
+  '--bg-elev',
+  '--text',
+  '--text-dim',
+  '--text-faint',
+  '--accent',
+  '--border',
+  '--border-strong',
+  '--ok',
+  '--warn',
+  '--err',
+] as const;
 
 function readThemeVars(): Record<string, string> {
   const s = getComputedStyle(document.documentElement);
@@ -91,9 +108,21 @@ export function EditorView({ tab }: { tab: OpenTab }) {
   const lang = useMemo(() => {
     const ext = tab.path?.split('.').pop()?.toLowerCase() ?? '';
     const map: Record<string, string> = {
-      ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
-      json: 'json', md: 'markdown', css: 'css', html: 'html', py: 'python',
-      go: 'go', rs: 'rust', sql: 'sql', yml: 'yaml', yaml: 'yaml', sh: 'shell',
+      ts: 'typescript',
+      tsx: 'typescript',
+      js: 'javascript',
+      jsx: 'javascript',
+      json: 'json',
+      md: 'markdown',
+      css: 'css',
+      html: 'html',
+      py: 'python',
+      go: 'go',
+      rs: 'rust',
+      sql: 'sql',
+      yml: 'yaml',
+      yaml: 'yaml',
+      sh: 'shell',
     };
     return map[ext] ?? 'plaintext';
   }, [tab.path]);
@@ -117,14 +146,20 @@ export function EditorView({ tab }: { tab: OpenTab }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [{ role: 'user', content: `File ${tab.path}:\n\n\`\`\`\n${content?.slice(0, 12000)}\n\`\`\`\n\n${instruction}\n\nRespond with the complete modified file content inside a single \`\`\` code block, nothing else.` }],
+          messages: [
+            {
+              role: 'user',
+              content: `File ${tab.path}:\n\n\`\`\`\n${content?.slice(0, 12000)}\n\`\`\`\n\n${instruction}\n\nRespond with the complete modified file content inside a single \`\`\` code block, nothing else.`,
+            },
+          ],
           model: useStore.getState().chatModel || useStore.getState().selectedModel,
           skillsEnabled: true,
         }),
       });
       const reader = res.body!.getReader();
       const dec = new TextDecoder();
-      let buf = '', acc = '';
+      let buf = '',
+        acc = '';
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -142,7 +177,15 @@ export function EditorView({ tab }: { tab: OpenTab }) {
       // Extract code block if present
       const m = acc.match(/```[a-z]*\n([\s\S]*?)```/);
       const newContent = m ? m[1] : acc;
-      if (m || (await confirmDialog({ title: 'Apply AI response as file content?', message: 'No code block was found in the response. Apply the raw text as the new file content?', confirmLabel: 'Apply' }))) {
+      if (
+        m ||
+        (await confirmDialog({
+          title: 'Apply AI response as file content?',
+          message:
+            'No code block was found in the response. Apply the raw text as the new file content?',
+          confirmLabel: 'Apply',
+        }))
+      ) {
         setFileContent(tab.path!, newContent);
         void saveFile(tab.path!, newContent);
       }
@@ -152,12 +195,18 @@ export function EditorView({ tab }: { tab: OpenTab }) {
   }
 
   async function explainSelection() {
-    const ed = editorRef.current as { getSelection?: () => unknown; getModel?: () => unknown; getValueInRange?: (s: unknown) => string } | null;
+    const ed = editorRef.current as {
+      getSelection?: () => unknown;
+      getModel?: () => unknown;
+      getValueInRange?: (s: unknown) => string;
+    } | null;
     let sel = '';
     try {
       const s = ed?.getSelection?.();
       if (s && ed?.getValueInRange) sel = ed.getValueInRange(s);
-    } catch { /* noop */ }
+    } catch {
+      /* noop */
+    }
     const text = sel || (content?.slice(0, 4000) ?? '');
     setAiBusy(true);
     try {
@@ -165,7 +214,9 @@ export function EditorView({ tab }: { tab: OpenTab }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [{ role: 'user', content: `Explain this code concisely:\n\n\`\`\`\n${text}\n\`\`\`` }],
+          messages: [
+            { role: 'user', content: `Explain this code concisely:\n\n\`\`\`\n${text}\n\`\`\`` },
+          ],
           model: useStore.getState().chatModel || useStore.getState().selectedModel,
           skillsEnabled: false,
         }),
@@ -180,10 +231,18 @@ export function EditorView({ tab }: { tab: OpenTab }) {
         if (done) break;
         acc += dec.decode(value, { stream: true });
       }
-      const deltas = [...acc.matchAll(/"delta":"((?:[^"\\]|\\.)*)"/g)].map((m2) => JSON.parse(`"${m2[1]}"`));
+      const deltas = [...acc.matchAll(/"delta":"((?:[^"\\]|\\.)*)"/g)].map((m2) =>
+        JSON.parse(`"${m2[1]}"`),
+      );
       const doneMatch = acc.match(/"type":"done","text":((?:[^"\\]|\\.)*)/);
       let out = deltas.join('');
-      if (doneMatch) { try { out = JSON.parse(`"${doneMatch[1]}"`).replace(/"\}$/,''); } catch { /* keep acc */ } }
+      if (doneMatch) {
+        try {
+          out = JSON.parse(`"${doneMatch[1]}"`).replace(/"\}$/, '');
+        } catch {
+          /* keep acc */
+        }
+      }
       setExplain(out || 'No explanation returned.');
     } finally {
       setAiBusy(false);
@@ -201,32 +260,85 @@ export function EditorView({ tab }: { tab: OpenTab }) {
   const dirPath = tab.path?.includes('/') ? tab.path.slice(0, tab.path.lastIndexOf('/')) : '';
 
   const trackSelection = () => {
-    const ed = editorRef.current as { getSelection?: () => unknown; getModel?: () => unknown; getValueInRange?: (s: unknown) => string } | null;
+    const ed = editorRef.current as {
+      getSelection?: () => unknown;
+      getModel?: () => unknown;
+      getValueInRange?: (s: unknown) => string;
+    } | null;
     try {
       const s = ed?.getSelection?.();
       setHasSelection(!!s && !!ed?.getValueInRange && !!ed.getValueInRange(s));
-    } catch { setHasSelection(false); }
+    } catch {
+      setHasSelection(false);
+    }
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <div className="breadcrumbs">
-        {dirPath && <span className="crumb-dir" title={tab.path}>{dirPath}/</span>}
+        {dirPath && (
+          <span className="crumb-dir" title={tab.path}>
+            {dirPath}/
+          </span>
+        )}
         <div style={{ flex: 1 }} />
-        {dirty && <button className="primary" onClick={() => tab.path && content !== undefined && void saveFile(tab.path, content)}>Save</button>}
+        {dirty && (
+          <button
+            className="primary"
+            onClick={() => tab.path && content !== undefined && void saveFile(tab.path, content)}
+          >
+            Save
+          </button>
+        )}
         <div className="ai-menu-wrap">
           <button
-            onClick={() => { setAiMenuOpen((v) => !v); trackSelection(); }}
+            onClick={() => {
+              setAiMenuOpen((v) => !v);
+              trackSelection();
+            }}
             title="AI actions — some apply to your current selection"
           >
-            AI actions {(hasSelection || aiMenuOpen) && <span className="ai-menu-sel-badge">selection</span>}
+            AI actions{' '}
+            {(hasSelection || aiMenuOpen) && <span className="ai-menu-sel-badge">selection</span>}
           </button>
           {aiMenuOpen && (
             <div className="ai-menu fade-in" onMouseLeave={() => setAiMenuOpen(false)}>
-              <button onClick={() => { setAiMenuOpen(false); void explainSelection(); }} disabled={aiBusy}>Explain{hasSelection ? ' selection' : ' file'}</button>
-              <button onClick={() => { setAiMenuOpen(false); void runAiEdit('Refactor this code for clarity and performance.'); }} disabled={aiBusy}>AI Refactor</button>
-              <button onClick={() => { setAiMenuOpen(false); void runAiEdit('Add clear docstring comments.'); }} disabled={aiBusy}>Add Comments</button>
-              <button onClick={() => { setAiMenuOpen(false); void runAiEdit('Find and fix bugs and potential errors.'); }} disabled={aiBusy}>Fix Errors</button>
+              <button
+                onClick={() => {
+                  setAiMenuOpen(false);
+                  void explainSelection();
+                }}
+                disabled={aiBusy}
+              >
+                Explain{hasSelection ? ' selection' : ' file'}
+              </button>
+              <button
+                onClick={() => {
+                  setAiMenuOpen(false);
+                  void runAiEdit('Refactor this code for clarity and performance.');
+                }}
+                disabled={aiBusy}
+              >
+                AI Refactor
+              </button>
+              <button
+                onClick={() => {
+                  setAiMenuOpen(false);
+                  void runAiEdit('Add clear docstring comments.');
+                }}
+                disabled={aiBusy}
+              >
+                Add Comments
+              </button>
+              <button
+                onClick={() => {
+                  setAiMenuOpen(false);
+                  void runAiEdit('Find and fix bugs and potential errors.');
+                }}
+                disabled={aiBusy}
+              >
+                Fix Errors
+              </button>
             </div>
           )}
         </div>
@@ -234,9 +346,16 @@ export function EditorView({ tab }: { tab: OpenTab }) {
         {model?.vision && <span className="badge">vision</span>}
       </div>
       {explain && (
-        <div className="bubble" style={{ margin: '8px 12px', maxHeight: 200, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
+        <div
+          className="bubble"
+          style={{ margin: '8px 12px', maxHeight: 200, overflow: 'auto', whiteSpace: 'pre-wrap' }}
+        >
           {explain}
-          <div><button style={{ marginTop: 6 }} onClick={() => setExplain(null)}>Dismiss</button></div>
+          <div>
+            <button style={{ marginTop: 6 }} onClick={() => setExplain(null)}>
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
       <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
@@ -249,13 +368,15 @@ export function EditorView({ tab }: { tab: OpenTab }) {
           onMount={onMount}
           onChange={(v) => tab.path && setFileContent(tab.path, v ?? '')}
           options={{
-            fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--mono').trim() || "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
+            fontFamily:
+              getComputedStyle(document.documentElement).getPropertyValue('--mono').trim() ||
+              "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
             fontSize: useStore.getState().settings?.ui.fontSize ?? 13,
             lineHeight: 1.45,
             fontLigatures: true,
             smoothScrolling: true,
-            cursorBlinking: "phase",
-            cursorSmoothCaretAnimation: "on",
+            cursorBlinking: 'phase',
+            cursorSmoothCaretAnimation: 'on',
             minimap: { enabled: true },
             automaticLayout: true,
             scrollBeyondLastLine: false,
@@ -273,7 +394,8 @@ export function DiffView({ tab }: { tab: OpenTab }) {
   const proposals = useStore((s) => s.proposals);
   const acceptProposal = useStore((s) => s.acceptProposal);
   const rejectProposal = useStore((s) => s.rejectProposal);
-  const proposal = proposals.find((p) => p.id === tab.path?.replace('proposal:', '')) ?? proposals[0];
+  const proposal =
+    proposals.find((p) => p.id === tab.path?.replace('proposal:', '')) ?? proposals[0];
 
   if (!proposal) return <div className="empty-state">No pending proposals.</div>;
   return (
@@ -289,8 +411,13 @@ export function DiffView({ tab }: { tab: OpenTab }) {
             <div key={hi}>
               {h.lines.map((l, li) => (
                 <div key={li} className={`diff-line ${l.type}`}>
-                  <span className="ln">{l.old > 0 ? l.old : ''}{l.new > 0 ? ` / ${l.new}` : ''}</span>
-                  <span className="sign">{l.type === 'add' ? '+' : l.type === 'del' ? '−' : ' '}</span>
+                  <span className="ln">
+                    {l.old > 0 ? l.old : ''}
+                    {l.new > 0 ? ` / ${l.new}` : ''}
+                  </span>
+                  <span className="sign">
+                    {l.type === 'add' ? '+' : l.type === 'del' ? '−' : ' '}
+                  </span>
                   <span style={{ whiteSpace: 'pre-wrap' }}>{l.text}</span>
                 </div>
               ))}

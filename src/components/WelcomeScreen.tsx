@@ -1,5 +1,15 @@
 import React from 'react';
-import { Sparkles, Compass, FlaskConical, Bug, FolderPlus, GitBranch, Command, History, Wand2 } from 'lucide-react';
+import {
+  Sparkles,
+  Compass,
+  FlaskConical,
+  Bug,
+  FolderPlus,
+  GitBranch,
+  Command,
+  History,
+  Wand2,
+} from 'lucide-react';
 import { useStore } from '../lib/store';
 import { promptDialog } from '../lib/dialogs';
 import { TechIcon } from './TechIcon';
@@ -61,7 +71,12 @@ export function WelcomeScreen({ onOpenPalette }: { onOpenPalette: () => void }) 
   const runCard = React.useCallback(
     async (card: WelcomeCard) => {
       if (card.id === 'add-folder') {
-        const root = await promptDialog({ title: 'Add workspace folder', placeholder: 'Absolute folder path…', folderPicker: true, confirmLabel: 'Add' });
+        const root = await promptDialog({
+          title: 'Add workspace folder',
+          placeholder: 'Absolute folder path…',
+          folderPicker: true,
+          confirmLabel: 'Add',
+        });
         if (root) void addWorkspace(root);
         return;
       }
@@ -78,12 +93,33 @@ export function WelcomeScreen({ onOpenPalette }: { onOpenPalette: () => void }) 
   // Detect the workspace's tech stack from file names in the tree.
   const detected = React.useMemo(() => {
     const hits = new Set<string>();
-    const walk = (node: { name?: string; type: string; children?: { name?: string; type: string; children?: unknown }[] }) => {
+    const walk = (node: {
+      name?: string;
+      type: string;
+      children?: { name?: string; type: string; children?: unknown }[];
+    }) => {
       const fileName = (node.name ?? '').toLowerCase();
       if (fileName) {
         if (fileName === 'package.json') hits.add('nodejs');
         const ext = fileName.includes('.') ? fileName.split('.').pop()! : '';
-        if (['ts', 'tsx', 'js', 'jsx', 'py', 'rs', 'go', 'css', 'scss', 'html', 'md', 'vue', 'svelte'].includes(ext)) hits.add(ext);
+        if (
+          [
+            'ts',
+            'tsx',
+            'js',
+            'jsx',
+            'py',
+            'rs',
+            'go',
+            'css',
+            'scss',
+            'html',
+            'md',
+            'vue',
+            'svelte',
+          ].includes(ext)
+        )
+          hits.add(ext);
       }
       node.children?.forEach((c) => walk(c as never));
     };
@@ -109,7 +145,9 @@ export function WelcomeScreen({ onOpenPalette }: { onOpenPalette: () => void }) 
                 onClick={() => current !== undefined && void runCard(card)}
                 title={card.prompt || 'Open a folder'}
               >
-                <span className="welcome-card-icon"><Icon size={15} /></span>
+                <span className="welcome-card-icon">
+                  <Icon size={15} />
+                </span>
                 <span className="welcome-card-label">{card.label}</span>
                 {card.prompt && <span className="welcome-card-prompt">{card.prompt}</span>}
               </button>
@@ -120,7 +158,9 @@ export function WelcomeScreen({ onOpenPalette }: { onOpenPalette: () => void }) 
         <div className="welcome-recent">
           <div className="welcome-recent-head">
             <span>Recent projects</span>
-            <button onClick={onOpenPalette} title="Command Palette (Ctrl+K)"><Command size={11} /> K</button>
+            <button onClick={onOpenPalette} title="Command Palette (Ctrl+K)">
+              <Command size={11} /> K
+            </button>
           </div>
           {recent.length > 0 ? (
             <div className="welcome-recent-list">
@@ -146,7 +186,12 @@ export function WelcomeScreen({ onOpenPalette }: { onOpenPalette: () => void }) 
               <button
                 className="primary"
                 onClick={async () => {
-                  const root = await promptDialog({ title: 'Add workspace folder', placeholder: 'Absolute folder path…', folderPicker: true, confirmLabel: 'Add' });
+                  const root = await promptDialog({
+                    title: 'Add workspace folder',
+                    placeholder: 'Absolute folder path…',
+                    folderPicker: true,
+                    confirmLabel: 'Add',
+                  });
                   if (root) void addWorkspace(root);
                 }}
               >
@@ -156,7 +201,10 @@ export function WelcomeScreen({ onOpenPalette }: { onOpenPalette: () => void }) 
           )}
         </div>
 
-        <div className="welcome-foot" style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+        <div
+          className="welcome-foot"
+          style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}
+        >
           <GitBranch size={12} className="icon-dim" />
           <span>
             {connected
@@ -169,7 +217,9 @@ export function WelcomeScreen({ onOpenPalette }: { onOpenPalette: () => void }) 
             Built from files actually present in the workspace tree. */}
         {detected.length > 0 && (
           <div className="welcome-stack" title="Detected technologies in this workspace">
-            {detected.map((name) => <TechIcon key={name} name={name} size={18} />)}
+            {detected.map((name) => (
+              <TechIcon key={name} name={name} size={18} />
+            ))}
           </div>
         )}
       </div>

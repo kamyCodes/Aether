@@ -66,7 +66,10 @@ test('enforceMockGuard: warn mode returns verdict without throwing', () => {
 
 test('enforceMockGuard: fail mode throws with the summary and baseUrl', () => {
   const v = detectMockGateway([{ id: 'mock-coder' }]);
-  assert.throws(() => enforceMockGuard(v, 'http://guard-test.invalid/v1', 'fail'), /MOCK-GATEWAY GUARD.*mock-coder.*guard-test\.invalid/s);
+  assert.throws(
+    () => enforceMockGuard(v, 'http://guard-test.invalid/v1', 'fail'),
+    /MOCK-GATEWAY GUARD.*mock-coder.*guard-test\.invalid/s,
+  );
 });
 
 test('enforceMockGuard: off mode and clean verdicts are no-ops', () => {

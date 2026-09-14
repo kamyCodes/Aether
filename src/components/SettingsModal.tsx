@@ -7,7 +7,16 @@ import { GlassDropdown, GlassButton } from './glass';
 import { formatTime } from '../utils/dates';
 
 /** Curated accent presets — quick one-click swatches beside the fine-tune input. */
-const ACCENT_PRESETS = ['#6E62E5', '#7c9cff', '#5b9cf5', '#4cc38a', '#c084fc', '#f59e0b', '#f472b6', '#22d3ee'];
+const ACCENT_PRESETS = [
+  '#6E62E5',
+  '#7c9cff',
+  '#5b9cf5',
+  '#4cc38a',
+  '#c084fc',
+  '#f59e0b',
+  '#f472b6',
+  '#22d3ee',
+];
 
 const RUNTIME_DEFAULTS = { omniDefaultBaseUrl: '…' } as const;
 let runtimeDefaults: typeof RUNTIME_DEFAULTS = { omniDefaultBaseUrl: '…' };
@@ -15,7 +24,11 @@ let runtimeDefaults: typeof RUNTIME_DEFAULTS = { omniDefaultBaseUrl: '…' };
 /** Placeholder is a resolved value from /api/config/runtime — the shared
  *  config module stays the single source of truth (no port literals here). */
 async function loadRuntimeDefaults(): Promise<void> {
-  try { runtimeDefaults = await get<typeof RUNTIME_DEFAULTS>('/config/runtime'); } catch { /* server offline; keep the neutral placeholder */ }
+  try {
+    runtimeDefaults = await get<typeof RUNTIME_DEFAULTS>('/config/runtime');
+  } catch {
+    /* server offline; keep the neutral placeholder */
+  }
 }
 void loadRuntimeDefaults();
 
@@ -28,10 +41,15 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
   if (!draft) return null;
 
-  const setOmni = (patch: Partial<AppSettings['omni']>) => setDraft({ ...draft, omni: { ...draft.omni, ...patch } });
-  const setUi = (patch: Partial<AppSettings['ui']>) => setDraft({ ...draft, ui: { ...draft.ui, ...patch } });
+  const setOmni = (patch: Partial<AppSettings['omni']>) =>
+    setDraft({ ...draft, omni: { ...draft.omni, ...patch } });
+  const setUi = (patch: Partial<AppSettings['ui']>) =>
+    setDraft({ ...draft, ui: { ...draft.ui, ...patch } });
   const setPref = (k: keyof AppSettings['omni']['modelPrefs'], v: string) =>
-    setDraft({ ...draft, omni: { ...draft.omni, modelPrefs: { ...draft.omni.modelPrefs, [k]: v || undefined } } });
+    setDraft({
+      ...draft,
+      omni: { ...draft.omni, modelPrefs: { ...draft.omni.modelPrefs, [k]: v || undefined } },
+    });
 
   return (
     <div className="modal-overlay" onMouseDown={onClose}>
@@ -40,55 +58,85 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         <div className="modal-results" style={{ padding: 4 }}>
           <div className="settings-form">
             <strong style={{ fontSize: 12 }}>Aether endpoint</strong>
-            <label>Base URL (OpenAI-compatible)
-              <input value={draft.omni.baseUrl} onChange={(e) => setOmni({ baseUrl: e.target.value })} placeholder={runtimeDefaults.omniDefaultBaseUrl} />
+            <label>
+              Base URL (OpenAI-compatible)
+              <input
+                value={draft.omni.baseUrl}
+                onChange={(e) => setOmni({ baseUrl: e.target.value })}
+                placeholder={runtimeDefaults.omniDefaultBaseUrl}
+              />
             </label>
-            <label>API key (stored locally, sent only to your endpoint)
-              <input type="password" value={draft.omni.apiKey} onChange={(e) => setOmni({ apiKey: e.target.value })} placeholder="(optional)" />
+            <label>
+              API key (stored locally, sent only to your endpoint)
+              <input
+                type="password"
+                value={draft.omni.apiKey}
+                onChange={(e) => setOmni({ apiKey: e.target.value })}
+                placeholder="(optional)"
+              />
             </label>
             <div className="settings-row">
-              <label>Timeout (ms)
-                <input type="number" value={draft.omni.timeoutMs} onChange={(e) => setOmni({ timeoutMs: Number(e.target.value) })} />
+              <label>
+                Timeout (ms)
+                <input
+                  type="number"
+                  value={draft.omni.timeoutMs}
+                  onChange={(e) => setOmni({ timeoutMs: Number(e.target.value) })}
+                />
               </label>
-              <label>Streaming
+              <label>
+                Streaming
                 <GlassDropdown
                   className="settings-dd btn-glass glass"
                   value={draft.omni.streaming ? 'on' : 'off'}
                   onValueChange={(v) => setOmni({ streaming: v === 'on' })}
                   ariaLabel="Streaming"
-                  options={[{ value: 'on', label: 'on' }, { value: 'off', label: 'off' }]}
+                  options={[
+                    { value: 'on', label: 'on' },
+                    { value: 'off', label: 'off' },
+                  ]}
                 />
               </label>
-              <label>Fallback model
+              <label>
+                Fallback model
                 <GlassDropdown
                   className="settings-dd btn-glass glass"
                   contentClassName="dd-content-scroll"
                   value={draft.omni.fallbackModel}
                   onValueChange={(v) => setOmni({ fallbackModel: v })}
                   ariaLabel="Fallback model"
-                  options={[{ value: '', label: '(none)' }, ...models.map((m) => ({ value: m.id, label: m.id }))]}
+                  options={[
+                    { value: '', label: '(none)' },
+                    ...models.map((m) => ({ value: m.id, label: m.id })),
+                  ]}
                 />
               </label>
             </div>
             <strong style={{ fontSize: 12 }}>Per-task model preferences</strong>
             <div className="settings-row">
-              {(['chat', 'coding', 'planning', 'vision', 'debugging', 'testing'] as const).map((k) => (
-                <label key={k} style={{ fontSize: 10 }}>
-                  {k}
-                  <GlassDropdown
-                    className="settings-dd btn-glass glass"
-                    contentClassName="dd-content-scroll"
-                    value={draft.omni.modelPrefs[k] ?? ''}
-                    onValueChange={(v) => setPref(k, v)}
-                    ariaLabel={`${k} model preference`}
-                    options={[{ value: '', label: '(default)' }, ...models.map((m) => ({ value: m.id, label: m.id }))]}
-                  />
-                </label>
-              ))}
+              {(['chat', 'coding', 'planning', 'vision', 'debugging', 'testing'] as const).map(
+                (k) => (
+                  <label key={k} style={{ fontSize: 10 }}>
+                    {k}
+                    <GlassDropdown
+                      className="settings-dd btn-glass glass"
+                      contentClassName="dd-content-scroll"
+                      value={draft.omni.modelPrefs[k] ?? ''}
+                      onValueChange={(v) => setPref(k, v)}
+                      ariaLabel={`${k} model preference`}
+                      options={[
+                        { value: '', label: '(default)' },
+                        ...models.map((m) => ({ value: m.id, label: m.id })),
+                      ]}
+                    />
+                  </label>
+                ),
+              )}
             </div>
             <strong style={{ fontSize: 12 }}>Appearance</strong>
             <div className="settings-row">
-              <label>Theme
+              <label>
+                Theme
                 <GlassDropdown
                   className="settings-dd btn-glass glass"
                   value={draft.ui.theme}
@@ -101,26 +149,62 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   ]}
                 />
               </label>
-              <label>Accent color
+              <label>
+                Accent color
                 <AccentPicker value={draft.ui.accent} onChange={(v) => setUi({ accent: v })} />
               </label>
-              <label>Font size
-                <input type="number" min={10} max={20} value={draft.ui.fontSize} onChange={(e) => setUi({ fontSize: Number(e.target.value) })} />
+              <label>
+                Font size
+                <input
+                  type="number"
+                  min={10}
+                  max={20}
+                  value={draft.ui.fontSize}
+                  onChange={(e) => setUi({ fontSize: Number(e.target.value) })}
+                />
               </label>
             </div>
             {/* Liquid Glass actions */}
             <div style={{ display: 'flex', gap: 8 }}>
-              <GlassButton className="primary btn-glass glass" onClick={async () => { await saveSettings(draft); void refreshModels(); onClose(); }}>Save</GlassButton>
-              <GlassButton className="btn-glass glass" onClick={onClose}>Cancel</GlassButton>
-              <GlassButton className="btn-glass glass" onClick={() => void refreshModels()}>Test connection</GlassButton>
+              <GlassButton
+                className="primary btn-glass glass"
+                onClick={async () => {
+                  await saveSettings(draft);
+                  void refreshModels();
+                  onClose();
+                }}
+              >
+                Save
+              </GlassButton>
+              <GlassButton className="btn-glass glass" onClick={onClose}>
+                Cancel
+              </GlassButton>
+              <GlassButton className="btn-glass glass" onClick={() => void refreshModels()}>
+                Test connection
+              </GlassButton>
             </div>
             <strong style={{ fontSize: 12 }}>Autonomy</strong>
             <div className="settings-row">
-              <label>Mode
+              <label>
+                Mode
                 <GlassDropdown
                   className="settings-dd settings-dd-wide btn-glass glass"
                   value={draft.agent?.autonomy?.mode ?? 'review'}
-                  onValueChange={(v) => setDraft({ ...draft, agent: { autonomy: { ...(draft.agent?.autonomy ?? { mode: 'review', allowPrefixes: [], denyPrefixes: [] }), mode: v as 'secure' | 'review' | 'agent' | 'custom' } } })}
+                  onValueChange={(v) =>
+                    setDraft({
+                      ...draft,
+                      agent: {
+                        autonomy: {
+                          ...(draft.agent?.autonomy ?? {
+                            mode: 'review',
+                            allowPrefixes: [],
+                            denyPrefixes: [],
+                          }),
+                          mode: v as 'secure' | 'review' | 'agent' | 'custom',
+                        },
+                      },
+                    })
+                  }
                   ariaLabel="Autonomy mode"
                   options={[
                     { value: 'secure', label: 'Secure — approve everything' },
@@ -133,11 +217,47 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </div>
             {draft.agent?.autonomy?.mode === 'custom' && (
               <div className="settings-row">
-                <label style={{ fontSize: 10 }}>Allow prefixes (comma-separated)
-                  <input value={(draft.agent.autonomy.allowPrefixes ?? []).join(', ')} onChange={(e) => setDraft({ ...draft, agent: { autonomy: { ...draft.agent.autonomy, allowPrefixes: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) } } })} placeholder="npm test, git status" />
+                <label style={{ fontSize: 10 }}>
+                  Allow prefixes (comma-separated)
+                  <input
+                    value={(draft.agent.autonomy.allowPrefixes ?? []).join(', ')}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        agent: {
+                          autonomy: {
+                            ...draft.agent.autonomy,
+                            allowPrefixes: e.target.value
+                              .split(',')
+                              .map((s) => s.trim())
+                              .filter(Boolean),
+                          },
+                        },
+                      })
+                    }
+                    placeholder="npm test, git status"
+                  />
                 </label>
-                <label style={{ fontSize: 10 }}>Deny prefixes
-                  <input value={(draft.agent.autonomy.denyPrefixes ?? []).join(', ')} onChange={(e) => setDraft({ ...draft, agent: { autonomy: { ...draft.agent.autonomy, denyPrefixes: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) } } })} placeholder="rm, git push" />
+                <label style={{ fontSize: 10 }}>
+                  Deny prefixes
+                  <input
+                    value={(draft.agent.autonomy.denyPrefixes ?? []).join(', ')}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        agent: {
+                          autonomy: {
+                            ...draft.agent.autonomy,
+                            denyPrefixes: e.target.value
+                              .split(',')
+                              .map((s) => s.trim())
+                              .filter(Boolean),
+                          },
+                        },
+                      })
+                    }
+                    placeholder="rm, git push"
+                  />
                 </label>
               </div>
             )}
@@ -160,11 +280,26 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
  */
 function ModelHealthTable() {
   const [open, setOpen] = useState(false);
-  const [snapshot, setSnapshot] = useState<{ models: Record<string, { status: string; lastChecked: number; lastLatencyMs?: number; lastError?: string; consecutiveFailures: number; cooldownUntil?: number }> } | null>(null);
+  const [snapshot, setSnapshot] = useState<{
+    models: Record<
+      string,
+      {
+        status: string;
+        lastChecked: number;
+        lastLatencyMs?: number;
+        lastError?: string;
+        consecutiveFailures: number;
+        cooldownUntil?: number;
+      }
+    >;
+  } | null>(null);
 
   useEffect(() => {
     if (!open || snapshot) return;
-    void fetch('/api/health/models').then((r) => r.json()).then(setSnapshot).catch(() => setSnapshot({ models: {} }));
+    void fetch('/api/health/models')
+      .then((r) => r.json())
+      .then(setSnapshot)
+      .catch(() => setSnapshot({ models: {} }));
   }, [open, snapshot]);
 
   const rows = snapshot
@@ -201,25 +336,51 @@ function ModelHealthTable() {
       {open && (
         <div className="settings-logs-body">
           {!snapshot && <div className="ac-note">Loading health data…</div>}
-          {snapshot && rows.length === 0 && <div className="ac-note">No probes recorded yet — the monitor runs at startup and every 10 minutes.</div>}
+          {snapshot && rows.length === 0 && (
+            <div className="ac-note">
+              No probes recorded yet — the monitor runs at startup and every 10 minutes.
+            </div>
+          )}
           {rows.length > 0 && (
             <table className="health-table">
               <thead>
-                <tr><th>Model</th><th>Status</th><th>Last probe</th><th>Cooldown</th><th title="Last error from the most recent probe">Error</th></tr>
+                <tr>
+                  <th>Model</th>
+                  <th>Status</th>
+                  <th>Last probe</th>
+                  <th>Cooldown</th>
+                  <th title="Last error from the most recent probe">Error</th>
+                </tr>
               </thead>
               <tbody>
                 {rows.map(([model, h]) => {
                   const coolingLeft = fmtCooldown(h.cooldownUntil);
                   return (
                     <tr key={model}>
-                      <td className="health-model" title={model}>{model}</td>
-                      <td>
-                        <span className={`model-health-dot ${h.status === 'healthy' ? 'ok' : h.status === 'failing' ? 'failing' : 'unknown'}`} />
-                        {h.consecutiveFailures > 1 && <span className="health-fails" title="consecutive failures">×{h.consecutiveFailures}</span>}
+                      <td className="health-model" title={model}>
+                        {model}
                       </td>
-                      <td className="health-dim" title={h.lastLatencyMs != null ? `${h.lastLatencyMs}ms` : undefined}>{fmtAge(h.lastChecked)}{h.lastLatencyMs != null ? ` · ${h.lastLatencyMs}ms` : ''}</td>
+                      <td>
+                        <span
+                          className={`model-health-dot ${h.status === 'healthy' ? 'ok' : h.status === 'failing' ? 'failing' : 'unknown'}`}
+                        />
+                        {h.consecutiveFailures > 1 && (
+                          <span className="health-fails" title="consecutive failures">
+                            ×{h.consecutiveFailures}
+                          </span>
+                        )}
+                      </td>
+                      <td
+                        className="health-dim"
+                        title={h.lastLatencyMs != null ? `${h.lastLatencyMs}ms` : undefined}
+                      >
+                        {fmtAge(h.lastChecked)}
+                        {h.lastLatencyMs != null ? ` · ${h.lastLatencyMs}ms` : ''}
+                      </td>
                       <td className="health-dim">{coolingLeft ? `${coolingLeft} left` : '—'}</td>
-                      <td className="health-err" title={h.lastError}>{h.lastError ? h.lastError.slice(0, 60) : '—'}</td>
+                      <td className="health-err" title={h.lastError}>
+                        {h.lastError ? h.lastError.slice(0, 60) : '—'}
+                      </td>
                     </tr>
                   );
                 })}
@@ -228,7 +389,13 @@ function ModelHealthTable() {
           )}
           <button
             className="settings-logs-clear"
-            onClick={() => { setSnapshot(null); void fetch('/api/health/models/refresh', { method: 'POST' }).then((r) => r.json()).then((j) => setSnapshot(j)).catch(() => setSnapshot({ models: {} })); }}
+            onClick={() => {
+              setSnapshot(null);
+              void fetch('/api/health/models/refresh', { method: 'POST' })
+                .then((r) => r.json())
+                .then((j) => setSnapshot(j))
+                .catch(() => setSnapshot({ models: {} }));
+            }}
           >
             Re-probe all models now
           </button>
@@ -247,7 +414,9 @@ function LogsSection() {
       <button className="settings-logs-head" onClick={() => setOpen((v) => !v)}>
         {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         <strong style={{ fontSize: 12 }}>Logs</strong>
-        <span className="ac-process-badge">{activity.length} event{activity.length === 1 ? '' : 's'}</span>
+        <span className="ac-process-badge">
+          {activity.length} event{activity.length === 1 ? '' : 's'}
+        </span>
       </button>
       {open && (
         <div className="settings-logs-body">
@@ -256,11 +425,18 @@ function LogsSection() {
             <div key={`${a.id}-${i}`} className={`settings-log-line ${a.status}`}>
               <span className="settings-log-time">{formatTime(a.ts)}</span>
               <span className="settings-log-label">{a.label}</span>
-              {a.error && <span className="settings-log-error" title={a.error}>⚠</span>}
+              {a.error && (
+                <span className="settings-log-error" title={a.error}>
+                  ⚠
+                </span>
+              )}
             </div>
           ))}
           {activity.length > 0 && (
-            <button className="settings-logs-clear" onClick={() => useStore.setState({ activity: [] })}>
+            <button
+              className="settings-logs-clear"
+              onClick={() => useStore.setState({ activity: [] })}
+            >
               <Trash2 size={11} /> Clear log
             </button>
           )}
@@ -300,7 +476,10 @@ function AccentPicker({ value, onChange }: { value: string; onChange: (v: string
         <input
           className="accent-hex"
           value={value}
-          onChange={(e) => { const v = e.target.value.trim(); if (/^#[0-9a-fA-F]{0,6}$/.test(v)) onChange(v); }}
+          onChange={(e) => {
+            const v = e.target.value.trim();
+            if (/^#[0-9a-fA-F]{0,6}$/.test(v)) onChange(v);
+          }}
           placeholder="#6E62E5"
           spellCheck={false}
         />

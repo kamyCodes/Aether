@@ -33,7 +33,7 @@ export default function App() {
   const activeTabId = useStore((s) => s.activeTabId);
   const theme = useStore((s) => s.settings?.ui.theme ?? 'dark');
   const accent = useStore((s) => s.settings?.ui.accent ?? '#6E62E5');
-  const rightTab = useStore((s) => s.activeChatId ? 'chat' : 'chat') as string;
+  const rightTab = useStore((s) => (s.activeChatId ? 'chat' : 'chat')) as string;
   const setRightTab = useState(rightTab)[1];
 
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -50,7 +50,9 @@ export default function App() {
   const [showRight, setShowRight] = useState(true);
   const [showBottom, setShowBottom] = useState(true);
 
-  useEffect(() => { void init(); }, [init]);
+  useEffect(() => {
+    void init();
+  }, [init]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -60,7 +62,11 @@ export default function App() {
     };
     // Mirror for the pre-React inline script in index.html, so the next page
     // load starts on the right theme with no flash.
-    try { localStorage.setItem('aether-theme', theme); } catch { /* private mode */ }
+    try {
+      localStorage.setItem('aether-theme', theme);
+    } catch {
+      /* private mode */
+    }
     // Cross-fade the whole UI when the theme flips (View Transitions API —
     // Chromium; other browsers apply instantly). Skip on first mount: no
     // old state to fade from, and the pre-React script already set it.
@@ -121,14 +127,16 @@ export default function App() {
       if (w >= 960 && prev < 820) setShowRight(true);
       if (h < 560 && prevH >= 560) setShowBottom(false);
       if (h >= 680 && prevH < 560) setShowBottom(true);
-      prev = w; prevH = h;
+      prev = w;
+      prevH = h;
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
-  void setRightTab; void rightTab;
+  void setRightTab;
+  void rightTab;
 
   return (
     <div className="app">
@@ -137,7 +145,10 @@ export default function App() {
           <button
             className="tl close"
             title="Close tab"
-            onClick={() => { const st = useStore.getState(); if (st.activeTabId) st.closeTab(st.activeTabId); }}
+            onClick={() => {
+              const st = useStore.getState();
+              if (st.activeTabId) st.closeTab(st.activeTabId);
+            }}
           />
           <button
             className="tl min"
@@ -153,7 +164,9 @@ export default function App() {
             }}
           />
         </div>
-        <span className="logo"><AetherMark size={16} /> Aether</span>
+        <span className="logo">
+          <AetherMark size={16} /> Aether
+        </span>
         <span className="logo-tagline">Build with agents.</span>
         <div className="title-center">
           {/* Command-palette entry point: read-only input that opens the
@@ -163,16 +176,49 @@ export default function App() {
             readOnly
             placeholder="Ask Aether, search your codebase, or run a command..."
             onClick={() => setPaletteOpen(true)}
-            onFocus={(e) => { e.currentTarget.blur(); setPaletteOpen(true); }}
+            onFocus={(e) => {
+              e.currentTarget.blur();
+              setPaletteOpen(true);
+            }}
             aria-label="Command palette (Ctrl+K)"
           />
-          <span className="global-search-hint" title="Open command palette">⌘K</span>
+          <span className="global-search-hint" title="Open command palette">
+            ⌘K
+          </span>
         </div>
         <div className="spacer" />
-        <button className="tb-icon-btn" onClick={() => setSettingsOpen(true)} title="Settings (Ctrl+,)" aria-label="Settings"><Settings size={14} /></button>
-        <button className="tb-icon-btn" onClick={() => setShowSidebar((v) => !v)} title="Toggle sidebar (Ctrl+B)" aria-label="Toggle sidebar"><PanelLeft size={14} /></button>
-        <button className="tb-icon-btn" onClick={() => setShowRight((v) => !v)} title="Toggle AI panel (chat & agent)" aria-label="Toggle AI panel"><PanelRight size={14} /></button>
-        <button className="tb-icon-btn" onClick={() => setShowBottom((v) => !v)} title="Toggle terminal (Ctrl+J)" aria-label="Toggle terminal"><PanelBottom size={14} /></button>
+        <button
+          className="tb-icon-btn"
+          onClick={() => setSettingsOpen(true)}
+          title="Settings (Ctrl+,)"
+          aria-label="Settings"
+        >
+          <Settings size={14} />
+        </button>
+        <button
+          className="tb-icon-btn"
+          onClick={() => setShowSidebar((v) => !v)}
+          title="Toggle sidebar (Ctrl+B)"
+          aria-label="Toggle sidebar"
+        >
+          <PanelLeft size={14} />
+        </button>
+        <button
+          className="tb-icon-btn"
+          onClick={() => setShowRight((v) => !v)}
+          title="Toggle AI panel (chat & agent)"
+          aria-label="Toggle AI panel"
+        >
+          <PanelRight size={14} />
+        </button>
+        <button
+          className="tb-icon-btn"
+          onClick={() => setShowBottom((v) => !v)}
+          title="Toggle terminal (Ctrl+J)"
+          aria-label="Toggle terminal"
+        >
+          <PanelBottom size={14} />
+        </button>
       </div>
 
       <div className="main">
@@ -188,16 +234,27 @@ export default function App() {
         <div className="editor-area">
           <TabBar />
           <div className="editor-canvas">
-          {activeTab?.kind === 'search' ? <SearchPanel /> :
-           activeTab?.kind === 'git' ? <GitPanel /> :
-           activeTab?.kind === 'review' ? <ReviewPanel /> :
-           activeTab?.kind === 'skills' ? <SkillsPanel /> :
-           activeTab?.kind === 'map' ? <MapPanel /> :
-           activeTab?.kind === 'settings' ? <div className="panel-body"><SettingsInline onOpen={() => setSettingsOpen(true)} /></div> :
-           activeTab?.kind === 'diff' ? <EditorView tab={activeTab} /> :
-           activeTab?.kind === 'file' ? <EditorView tab={activeTab} /> : (
-            <WelcomeScreen onOpenPalette={() => setPaletteOpen(true)} />
-          )}
+            {activeTab?.kind === 'search' ? (
+              <SearchPanel />
+            ) : activeTab?.kind === 'git' ? (
+              <GitPanel />
+            ) : activeTab?.kind === 'review' ? (
+              <ReviewPanel />
+            ) : activeTab?.kind === 'skills' ? (
+              <SkillsPanel />
+            ) : activeTab?.kind === 'map' ? (
+              <MapPanel />
+            ) : activeTab?.kind === 'settings' ? (
+              <div className="panel-body">
+                <SettingsInline onOpen={() => setSettingsOpen(true)} />
+              </div>
+            ) : activeTab?.kind === 'diff' ? (
+              <EditorView tab={activeTab} />
+            ) : activeTab?.kind === 'file' ? (
+              <EditorView tab={activeTab} />
+            ) : (
+              <WelcomeScreen onOpenPalette={() => setPaletteOpen(true)} />
+            )}
           </div>
           {showBottom && (
             <>
@@ -217,7 +274,9 @@ export default function App() {
                       { value: 'preview', label: 'Preview' },
                     ]}
                   />
-                  <button onClick={() => setShowBottom(false)} title="Close panel"><X size={13} /></button>
+                  <button onClick={() => setShowBottom(false)} title="Close panel">
+                    <X size={13} />
+                  </button>
                 </div>
                 {bottomTab === 'terminal' ? <TerminalPanel /> : <PreviewPanel />}
               </div>
@@ -241,7 +300,13 @@ export default function App() {
                   onValueChange={() => {}}
                   options={[{ value: 'chat', label: 'Chat & Agent' }]}
                 />
-                <button className="palette-hint" onClick={() => setPaletteOpen(true)} title="Open the command palette (Ctrl+K)"><Command size={10} /> Ctrl+K</button>
+                <button
+                  className="palette-hint"
+                  onClick={() => setPaletteOpen(true)}
+                  title="Open the command palette (Ctrl+K)"
+                >
+                  <Command size={10} /> Ctrl+K
+                </button>
               </div>
               <AgentChat />
               <Composer />
@@ -253,17 +318,47 @@ export default function App() {
 
       <StatusBar />
       <Toasts />
-      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} onOpenSettings={() => setSettingsOpen(true)} />}
+      {paletteOpen && (
+        <CommandPalette
+          onClose={() => setPaletteOpen(false)}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+      )}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       <Dialogs />
       {/* Liquid Glass refraction filter — must exist EXACTLY ONCE in the app
           shell; the shared .glass class references it by id. Chromium only —
           other engines keep the plain-blur fallback declared before it. */}
-      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true" focusable="false">
-        <filter id="glass-distortion" colorInterpolationFilters="sRGB" x="-20%" y="-20%" width="140%" height="140%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.008 0.008" numOctaves={2} seed={4} result="noise" />
+      <svg
+        width="0"
+        height="0"
+        style={{ position: 'absolute' }}
+        aria-hidden="true"
+        focusable="false"
+      >
+        <filter
+          id="glass-distortion"
+          colorInterpolationFilters="sRGB"
+          x="-20%"
+          y="-20%"
+          width="140%"
+          height="140%"
+        >
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.008 0.008"
+            numOctaves={2}
+            seed={4}
+            result="noise"
+          />
           <feGaussianBlur in="noise" stdDeviation={2} result="softNoise" />
-          <feDisplacementMap in="SourceGraphic" in2="softNoise" scale={30} xChannelSelector="R" yChannelSelector="G" />
+          <feDisplacementMap
+            in="SourceGraphic"
+            in2="softNoise"
+            scale={30}
+            xChannelSelector="R"
+            yChannelSelector="G"
+          />
         </filter>
       </svg>
     </div>
@@ -274,7 +369,9 @@ function SettingsInline({ onOpen }: { onOpen: () => void }) {
   return (
     <div className="empty-state">
       <div>Editor settings are under Settings</div>
-      <button className="primary" onClick={onOpen}>Open Settings</button>
+      <button className="primary" onClick={onOpen}>
+        Open Settings
+      </button>
     </div>
   );
 }

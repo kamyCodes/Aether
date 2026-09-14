@@ -48,7 +48,9 @@ export function ContextMonitor() {
 
   useEffect(() => {
     const t = setInterval(() => {
-      void get<ContextReport>('/context').then((c) => useStore.setState({ context: c })).catch(() => {});
+      void get<ContextReport>('/context')
+        .then((c) => useStore.setState({ context: c }))
+        .catch(() => {});
     }, 5000);
     return () => clearInterval(t);
   }, []);
@@ -62,7 +64,7 @@ export function ContextMonitor() {
   useEffect(() => {
     if (!context) return;
     const pct = (context.used / context.contextWindow) * 100;
-    const threshold = (context.compactAtPct ?? 80);
+    const threshold = context.compactAtPct ?? 80;
     // Fire only while armed: a crossing that happens while disarmed (inside
     // the hysteresis band) is ignored.
     if (rearmed.current && pct >= threshold) {
@@ -76,11 +78,19 @@ export function ContextMonitor() {
     // hysteresis band) — e.g. after a reset or compaction.
     if (!rearmed.current && pct < threshold - HYSTERESIS_PCT) {
       rearmed.current = true;
-      if (flashTimer.current) { window.clearTimeout(flashTimer.current); flashTimer.current = null; }
+      if (flashTimer.current) {
+        window.clearTimeout(flashTimer.current);
+        flashTimer.current = null;
+      }
       setFlashing(false);
     }
   }, [context]);
-  useEffect(() => () => { if (flashTimer.current) window.clearTimeout(flashTimer.current); }, []);
+  useEffect(
+    () => () => {
+      if (flashTimer.current) window.clearTimeout(flashTimer.current);
+    },
+    [],
+  );
 
   // Keep open while the pointer is over the button OR the floating card
   // (card is a sibling inside wrapRef, so one contains() check covers both).
@@ -90,13 +100,26 @@ export function ContextMonitor() {
     leaveTimer.current = window.setTimeout(() => setOpen(false), 180);
   };
   const cancelClose = () => {
-    if (leaveTimer.current) { window.clearTimeout(leaveTimer.current); leaveTimer.current = null; }
+    if (leaveTimer.current) {
+      window.clearTimeout(leaveTimer.current);
+      leaveTimer.current = null;
+    }
   };
-  useEffect(() => () => { if (leaveTimer.current) window.clearTimeout(leaveTimer.current); }, []);
+  useEffect(
+    () => () => {
+      if (leaveTimer.current) window.clearTimeout(leaveTimer.current);
+    },
+    [],
+  );
 
   // Click pins/unpins the card open (ignores hover); Escape unpins.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setPinned(false); setOpen(false); } };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPinned(false);
+        setOpen(false);
+      }
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
@@ -113,7 +136,14 @@ export function ContextMonitor() {
     <div
       ref={wrapRef}
       className="ctx-wrap"
-      style={{ position: 'relative', flexShrink: 0, display: 'flex', justifyContent: 'flex-end', padding: '6px 10px', borderTop: '1px solid var(--border)' }}
+      style={{
+        position: 'relative',
+        flexShrink: 0,
+        display: 'flex',
+        justifyContent: 'flex-end',
+        padding: '6px 10px',
+        borderTop: '1px solid var(--border)',
+      }}
     >
       {/* Floating detail card (hover popover). Hover handlers live here and
           on the FAB only — NOT on the wrapper row, which spans the full panel
@@ -131,7 +161,10 @@ export function ContextMonitor() {
             </span>
           </div>
           <div className="context-bar" style={{ marginTop: 6 }}>
-            <div className="context-bar-fill" style={{ transform: `scaleX(${pct / 100})`, background: ringColor }} />
+            <div
+              className="context-bar-fill"
+              style={{ transform: `scaleX(${pct / 100})`, background: ringColor }}
+            />
           </div>
 
           <div className="ctx-row" style={{ marginTop: 8 }}>
@@ -166,29 +199,48 @@ export function ContextMonitor() {
             </>
           )}
           {!tu && (
-            <div className="ctx-note">No provider usage reported yet — run a task or send a chat message.</div>
+            <div className="ctx-note">
+              No provider usage reported yet — run a task or send a chat message.
+            </div>
           )}
 
           <div className="ctx-sep" />
           <div className="ctx-rows">
-            <span>System</span><span>{fmt(context.breakdown.system)}</span>
-            <span>Files</span><span>{fmt(context.breakdown.files)}</span>
-            <span>Chat</span><span>{fmt(context.breakdown.chat)}</span>
-            <span>Tools</span><span>{fmt(context.breakdown.tools)}</span>
-            <span>Skills</span><span>{fmt(context.breakdown.skills)}</span>
+            <span>System</span>
+            <span>{fmt(context.breakdown.system)}</span>
+            <span>Files</span>
+            <span>{fmt(context.breakdown.files)}</span>
+            <span>Chat</span>
+            <span>{fmt(context.breakdown.chat)}</span>
+            <span>Tools</span>
+            <span>{fmt(context.breakdown.tools)}</span>
+            <span>Skills</span>
+            <span>{fmt(context.breakdown.skills)}</span>
           </div>
           <div className="ctx-note" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ flex: 1 }}>
-              {context.exact ? 'Exact usage from the provider.' : 'Estimated (~4 chars/token) — provider did not report usage.'}
+              {context.exact
+                ? 'Exact usage from the provider.'
+                : 'Estimated (~4 chars/token) — provider did not report usage.'}
             </span>
-            <button onClick={(e) => { e.stopPropagation(); void post('/context/reset').then(() => useStore.getState().refreshContext()); }}>Reset</button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void post('/context/reset').then(() => useStore.getState().refreshContext());
+              }}
+            >
+              Reset
+            </button>
           </div>
 
           {context.files.length > 0 && (
             <div className="ctx-files">
               {context.files.map((f) => (
                 <div key={f.path} className="ctx-file-row">
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.pinned ? '📌 ' : ''}{f.path}</span>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {f.pinned ? '📌 ' : ''}
+                    {f.path}
+                  </span>
                   <span style={{ color: 'var(--text-faint)' }}>{fmt(f.tokens)} tok</span>
                 </div>
               ))}
@@ -202,14 +254,31 @@ export function ContextMonitor() {
         className={`ctx-fab ${open ? 'open' : ''} ${flashing ? 'ctx-alert' : ''}`}
         title={`Context: ${fmt(context.used)} / ${fmt(context.contextWindow)} (${Math.round(pct)}%) — hover for details`}
         aria-label="Context usage"
-        onMouseEnter={() => { cancelClose(); setOpen(true); }}
+        onMouseEnter={() => {
+          cancelClose();
+          setOpen(true);
+        }}
         onMouseLeave={pinned ? undefined : armClose}
-        onClick={() => { const next = !pinned; setPinned(next); setOpen(next); }}
+        onClick={() => {
+          const next = !pinned;
+          setPinned(next);
+          setOpen(next);
+        }}
       >
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
-          <circle cx={SIZE / 2} cy={SIZE / 2} r={R} fill="none" stroke="var(--border)" strokeWidth={STROKE} />
           <circle
-            cx={SIZE / 2} cy={SIZE / 2} r={R} fill="none"
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={R}
+            fill="none"
+            stroke="var(--border)"
+            strokeWidth={STROKE}
+          />
+          <circle
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={R}
+            fill="none"
             stroke={ringColor}
             strokeWidth={STROKE}
             strokeLinecap="round"

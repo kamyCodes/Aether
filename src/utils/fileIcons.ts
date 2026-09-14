@@ -59,15 +59,14 @@ export function maybeRefreshIconDir(): Promise<void> {
     .then((r) => (r.ok ? r.json() : { icons: [] }))
     .then((d: { icons: string[] }) => {
       const fresh = new Set<string>(d.icons ?? []);
-      const added = availableIcons
-        ? [...fresh].filter((n) => !availableIcons!.has(n))
-        : [];
+      const added = availableIcons ? [...fresh].filter((n) => !availableIcons!.has(n)) : [];
       availableIcons = fresh;
       // New SVGs landed (or first load): invalidate fallback entries so they
       // can re-resolve against the now-known set, and notify subscribers.
       if (added.length || !d.icons) {
         for (const [name, svg] of fileCache) if (isFallbackIcon(svg)) fileCache.delete(name);
-        for (const [name, svg] of folderCache) if (isFallbackIcon(svg.closed)) folderCache.delete(name);
+        for (const [name, svg] of folderCache)
+          if (isFallbackIcon(svg.closed)) folderCache.delete(name);
       }
       for (const cb of listeners) cb();
     })
@@ -81,7 +80,9 @@ export function maybeRefreshIconDir(): Promise<void> {
 
 /** True if the icon resolved to the generic fallback (used by tests/UI hints). */
 export function isFallbackIcon(svgName: string): boolean {
-  return svgName === DEFAULT_FILE || svgName === DEFAULT_FOLDER || svgName === DEFAULT_FOLDER_OPENED;
+  return (
+    svgName === DEFAULT_FILE || svgName === DEFAULT_FOLDER || svgName === DEFAULT_FOLDER_OPENED
+  );
 }
 
 /**

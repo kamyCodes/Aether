@@ -47,13 +47,23 @@ export const useDialogs = create<DialogState>((set) => ({
   openAlert: (title, message) =>
     new Promise((resolve) => set({ alertMsg: { title, message, resolve } })),
   closePrompt: (v) =>
-    set((s) => { s.prompt?.resolve(v); return { prompt: null }; }),
+    set((s) => {
+      s.prompt?.resolve(v);
+      return { prompt: null };
+    }),
   closeConfirm: (v) =>
-    set((s) => { s.confirm?.resolve(v); return { confirm: null }; }),
+    set((s) => {
+      s.confirm?.resolve(v);
+      return { confirm: null };
+    }),
   closeAlert: () =>
-    set((s) => { s.alertMsg?.resolve(); return { alertMsg: null }; }),
+    set((s) => {
+      s.alertMsg?.resolve();
+      return { alertMsg: null };
+    }),
 }));
 
 export const promptDialog = (opts: PromptOptions) => useDialogs.getState().openPrompt(opts);
 export const confirmDialog = (opts: ConfirmOptions) => useDialogs.getState().openConfirm(opts);
-export const alertDialog = (title: string, message?: string) => useDialogs.getState().openAlert(title, message);
+export const alertDialog = (title: string, message?: string) =>
+  useDialogs.getState().openAlert(title, message);
