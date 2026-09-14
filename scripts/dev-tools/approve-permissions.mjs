@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Headless helper: polls GET /api/permissions/pending and auto-approves each
-// pending request. Usage: AETHER_URL=... node scripts/approve-permissions.mjs [seconds]
-import { configDefault, hostDefault } from './read-config.mjs';
+// pending request. Usage: AETHER_URL=... node scripts/dev-tools/approve-permissions.mjs [seconds]
+import { configDefault, hostDefault } from '../read-config.mjs';
 const BASE = process.env.AETHER_URL ?? `http://${hostDefault()}:${configDefault('PORT')}/api`;
 const seconds = Number(process.argv[2] ?? 90);
 
@@ -24,6 +24,10 @@ async function once() {
 
 const end = Date.now() + seconds * 1000;
 while (Date.now() < end) {
-  try { await once(); } catch { /* server restarting */ }
+  try {
+    await once();
+  } catch {
+    /* server restarting */
+  }
   await sleep(1500);
 }

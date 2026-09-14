@@ -1,4 +1,9 @@
 import type { ContextReport } from '../shared/types.js';
+/**
+ * ContextManager — tracks what fits in the model's context window for the
+ * current task: token budget accounting across messages, files, and tool
+ * results.
+ */
 import { countTokens } from './tokens.js';
 import type { ProjectIndexer } from './indexer.js';
 
@@ -84,7 +89,11 @@ export class ContextManager {
   }
 
   /** Compress chat history: keep the last N messages verbatim, summarize earlier ones. */
-  compressChat<T extends { content: string; role: string }>(history: T[], keepLast = 12, maxTokens = 6000): T[] {
+  compressChat<T extends { content: string; role: string }>(
+    history: T[],
+    keepLast = 12,
+    maxTokens = 6000,
+  ): T[] {
     let total = history.reduce((a, m) => a + countTokens(m.content), 0);
     if (total <= maxTokens) return history;
     const out = [...history];
@@ -110,7 +119,10 @@ export class ContextManager {
       pinned: this.pinned.has(p),
     }));
     const used =
-      this.systemTokens + this.skillsTokens + this.chatTokens + this.toolsTokens +
+      this.systemTokens +
+      this.skillsTokens +
+      this.chatTokens +
+      this.toolsTokens +
       files.reduce((a, f) => a + f.tokens, 0);
     return {
       contextWindow: this.contextWindow,

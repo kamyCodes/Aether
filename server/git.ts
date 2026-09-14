@@ -1,3 +1,7 @@
+/**
+ * GitManager — workspace git operations (status, diff, stage, commit, review
+ * summaries). Wraps isomorphic-git plus host git for heavy operations.
+ */
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -10,7 +14,10 @@ export class GitManager {
   async status(root: string) {
     const matrix = await git.statusMatrix({ fs, dir: root });
     const files = matrix
-      .filter(([, head, workdir, stage]) => !(Number(head) === 1 && Number(workdir) === 1 && Number(stage) === 1))
+      .filter(
+        ([, head, workdir, stage]) =>
+          !(Number(head) === 1 && Number(workdir) === 1 && Number(stage) === 1),
+      )
       .map(([file, headV, workdir]) => ({
         path: file,
         status: Number(workdir) === 0 ? 'deleted' : Number(headV) === 0 ? 'added' : 'modified',
@@ -27,7 +34,9 @@ export class GitManager {
     let status: FileDiff['status'] = 'modified';
     try {
       const commit = await git.resolveRef({ fs, dir: root, ref: 'HEAD' });
-      const blob = await git.readBlob({ fs, dir: root, oid: commit, filepath: relPath }).catch(() => null);
+      const blob = await git
+        .readBlob({ fs, dir: root, oid: commit, filepath: relPath })
+        .catch(() => null);
       if (blob) old = Buffer.from(blob.blob).toString('utf8');
       else status = 'added';
     } catch {
@@ -52,12 +61,20 @@ export class GitManager {
         await git.add({ fs, dir: root, filepath: f });
       } catch {
         /* deleted file */
-        try { await git.remove({ fs, dir: root, filepath: f }); } catch { /* ignore */ }
+        try {
+          await git.remove({ fs, dir: root, filepath: f });
+        } catch {
+          /* ignore */
+        }
       }
     }
   }
 
-  async commit(root: string, message: string, author = { name: 'Aether', email: 'agent@aether.local' }) {
+  async commit(
+    root: string,
+    message: string,
+    author = { name: 'Aether', email: 'agent@aether.local' },
+  ) {
     const sha = await git.commit({ fs, dir: root, message, author });
     return sha;
   }
@@ -90,7 +107,12 @@ export class GitManager {
 }
 
 /** Unified-diff builder used by proposals, git diff views and the UI. */
-export function buildFileDiff(relPath: string, status: FileDiff['status'], oldC: string, newC: string): FileDiff {
+export function buildFileDiff(
+  relPath: string,
+  status: FileDiff['status'],
+  oldC: string,
+  newC: string,
+): FileDiff {
   const parts = diffLines(oldC, newC);
   const hunks: DiffHunk[] = [];
   let oldLine = 1;
@@ -116,7 +138,9 @@ export function buildFileDiff(relPath: string, status: FileDiff['status'], oldC:
     void count;
     if (part.added) {
       if (!current) current = { header: `@@ ${relPath} @@`, lines: [] };
-      for (const ctx of pendingCtx) { current.lines.push(ctx); }
+      for (const ctx of pendingCtx) {
+        current.lines.push(ctx);
+      }
       pendingCtx = [];
       for (const l of lines) {
         current!.lines.push({ type: 'add', old: -1, new: newLine++, text: l });
@@ -124,7 +148,9 @@ export function buildFileDiff(relPath: string, status: FileDiff['status'], oldC:
       }
     } else if (part.removed) {
       if (!current) current = { header: `@@ ${relPath} @@`, lines: [] };
-      for (const ctx of pendingCtx) { current.lines.push(ctx); }
+      for (const ctx of pendingCtx) {
+        current.lines.push(ctx);
+      }
       pendingCtx = [];
       for (const l of lines) {
         current!.lines.push({ type: 'del', old: oldLine++, new: -1, text: l });
@@ -132,7 +158,12 @@ export function buildFileDiff(relPath: string, status: FileDiff['status'], oldC:
       }
     } else {
       for (const l of lines) {
-        const ctxLine: DiffHunk['lines'][number] = { type: 'ctx', old: oldLine++, new: newLine++, text: l };
+        const ctxLine: DiffHunk['lines'][number] = {
+          type: 'ctx',
+          old: oldLine++,
+          new: newLine++,
+          text: l,
+        };
         if (current) {
           current.lines.push(ctxLine);
         } else {

@@ -33,16 +33,30 @@ export function classifyTask(input: {
   const prompt = input.prompt.toLowerCase();
   const files = (input.files ?? []).map((f) => f.toLowerCase());
 
-  if (input.hasImage || /\.(png|jpe?g|gif|webp|bmp)$/.test(prompt) || files.some((f) => /\.(png|jpe?g|gif|webp|bmp)$/.test(f))) {
+  if (
+    input.hasImage ||
+    /\.(png|jpe?g|gif|webp|bmp)$/.test(prompt) ||
+    files.some((f) => /\.(png|jpe?g|gif|webp|bmp)$/.test(f))
+  ) {
     return { category: 'vision', reason: 'image attachment or image path in the task' };
   }
-  if (input.hasErrorText || /error|exception|stack ?trace|traceback|fails?|crash|bug|broken|cannot|unable to/i.test(prompt)) {
+  if (
+    input.hasErrorText ||
+    /error|exception|stack ?trace|traceback|fails?|crash|bug|broken|cannot|unable to/i.test(prompt)
+  ) {
     return { category: 'debugging', reason: 'error/failure language in the task' };
   }
-  if (files.some((f) => /(^|\/)(test|tests|__tests__|spec)(\/|$)|\.test\.|\.spec\./.test(f)) || /\btest(s|ing)?\b|\bspec\b|\bcoverage\b/.test(prompt)) {
+  if (
+    files.some((f) => /(^|\/)(test|tests|__tests__|spec)(\/|$)|\.test\.|\.spec\./.test(f)) ||
+    /\btest(s|ing)?\b|\bspec\b|\bcoverage\b/.test(prompt)
+  ) {
     return { category: 'testing', reason: 'test files or test vocabulary in the task' };
   }
-  if (input.mode === 'plan' || /^\[plan\]/i.test(prompt) || /\bplan\b|\bdesign\b|\barchitect|\brefactor\b|\bapproach\b|\bsteps\b/.test(prompt)) {
+  if (
+    input.mode === 'plan' ||
+    /^\[plan\]/i.test(prompt) ||
+    /\bplan\b|\bdesign\b|\barchitect|\brefactor\b|\bapproach\b|\bsteps\b/.test(prompt)
+  ) {
     return { category: 'planning', reason: 'planning vocabulary or plan mode' };
   }
   if (input.mode === 'ask') {

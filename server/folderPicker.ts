@@ -1,3 +1,8 @@
+/**
+ * Native OS folder picker: spawns a PowerShell (Windows) dialog that returns
+ * the chosen path on stdout. Kept as its own module so the embedded script
+ * can be compile-checked (scripts/dev-tools/test-picker-compile.mjs).
+ */
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -154,7 +159,7 @@ function buildPsScript(): string {
     CSHARP_PICKER,
     "'@",
     'try {',
-    "  Add-Type -ReferencedAssemblies System.Windows.Forms,System.Drawing,System -TypeDefinition $src",
+    '  Add-Type -ReferencedAssemblies System.Windows.Forms,System.Drawing,System -TypeDefinition $src',
     '} catch { Write-Error $_; exit 1 }',
     '$p = [AetherFolderPicker]::Pick($StartDir, $Marker, $Mode)',
     'if ($p) { Write-Output $p }',
@@ -174,9 +179,15 @@ function getScriptPath(): string {
   return scriptPath;
 }
 
-export function pickFolder(startDir?: string, marker?: string, mode: 'folder' | 'file' = 'folder'): Promise<string | null> {
+export function pickFolder(
+  startDir?: string,
+  marker?: string,
+  mode: 'folder' | 'file' = 'folder',
+): Promise<string | null> {
   return new Promise((resolve) => {
-    const timer = setTimeout(() => { resolve(null); }, 120_000);
+    const timer = setTimeout(() => {
+      resolve(null);
+    }, 120_000);
 
     const finish = (v: string | null) => {
       clearTimeout(timer);
@@ -188,14 +199,29 @@ export function pickFolder(startDir?: string, marker?: string, mode: 'folder' | 
       try {
         proc = spawn(
           'powershell.exe',
-          ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', getScriptPath(), '-StartDir', startDir ?? '', '-Marker', marker ?? '', '-Mode', mode],
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            getScriptPath(),
+            '-StartDir',
+            startDir ?? '',
+            '-Marker',
+            marker ?? '',
+            '-Mode',
+            mode,
+          ],
           { windowsHide: true },
         );
       } catch {
         return finish(null);
       }
       let out = '';
-      proc.stdout.on('data', (c) => { out += c; });
+      proc.stdout.on('data', (c) => {
+        out += c;
+      });
       proc.on('error', () => finish(null));
       proc.on('close', (code) => {
         const p = out.trim().replace(/^\uFEFF/, '');
@@ -210,15 +236,23 @@ export function pickFolder(startDir?: string, marker?: string, mode: 'folder' | 
       // is a plain POSIX path (no quotes/backslashes/controls). Anything else
       // is dropped rather than escaped — the dialog just opens at the default
       // location. Never interpolate unsanitized strings into script source.
-      const safeStart = startDir && /^[-a-zA-Z0-9_ ./~()\u00C0-\u024F\u2013\u2014\u2019]+$/.test(startDir) && !startDir.includes('"') && !startDir.includes('\\')
-        ? ` default location POSIX file "${startDir}"`
-        : '';
+      const safeStart =
+        startDir &&
+        /^[-a-zA-Z0-9_ ./~()\u00C0-\u024F\u2013\u2014\u2019]+$/.test(startDir) &&
+        !startDir.includes('"') &&
+        !startDir.includes('\\')
+          ? ` default location POSIX file "${startDir}"`
+          : '';
       const script = `POSIX paths of (${choose}${safeStart})`;
       const proc = spawn('osascript', ['-e', script]);
       let out = '';
-      proc.stdout.on('data', (c) => { out += c; });
+      proc.stdout.on('data', (c) => {
+        out += c;
+      });
       proc.on('error', () => finish(null));
-      proc.on('close', (code) => finish(code === 0 && out.trim() ? out.trim().replace(/\/$/, '') : null));
+      proc.on('close', (code) =>
+        finish(code === 0 && out.trim() ? out.trim().replace(/\/$/, '') : null),
+      );
       return;
     }
 
@@ -228,16 +262,33 @@ export function pickFolder(startDir?: string, marker?: string, mode: 'folder' | 
       const { cmd, args } = cmds[0];
       const proc = spawn(cmd, args);
       let out = '';
-      proc.stdout.on('data', (c) => { out += c; });
+      proc.stdout.on('data', (c) => {
+        out += c;
+      });
       proc.on('error', () => tryNext(cmds.slice(1)));
       proc.on('close', (code) => {
         const p = out.trim();
-        if (code === 0 && p) finish(p); else tryNext(cmds.slice(1));
+        if (code === 0 && p) finish(p);
+        else tryNext(cmds.slice(1));
       });
     };
     tryNext([
-      { cmd: 'zenity', args: ['--file-selection', ...(mode === 'folder' ? ['--directory'] : []), ...(startDir ? [`--filename=${startDir}`] : [])] },
-      ...(mode === 'folder' ? [{ cmd: 'kdialog', args: ['--getexistingdirectory', startDir ?? process.env.HOME ?? '/'] }] : []),
+      {
+        cmd: 'zenity',
+        args: [
+          '--file-selection',
+          ...(mode === 'folder' ? ['--directory'] : []),
+          ...(startDir ? [`--filename=${startDir}`] : []),
+        ],
+      },
+      ...(mode === 'folder'
+        ? [
+            {
+              cmd: 'kdialog',
+              args: ['--getexistingdirectory', startDir ?? process.env.HOME ?? '/'],
+            },
+          ]
+        : []),
     ]);
   });
 }

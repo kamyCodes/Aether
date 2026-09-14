@@ -1,3 +1,7 @@
+/**
+ * Model catalog enrichment: normalizes gateway /models output (adds routing
+ * aliases, free-tier flags, category hints) used by router.ts and settings.
+ */
 import type { ModelInfo } from '../shared/types.js';
 
 /**
@@ -46,7 +50,9 @@ export function isChatCapable(model: Pick<ModelInfo, 'type' | 'object'>): boolea
 export function getSelectableModels(
   allModels: Pick<ModelInfo, 'id' | 'owned_by' | 'name' | 'type' | 'object'>[],
 ): ModelInfo[] {
-  return allModels.filter((m) => isChatCapable(m) && (isRoutingAlias(m) || isFreeModel(m))) as ModelInfo[];
+  return allModels.filter(
+    (m) => isChatCapable(m) && (isRoutingAlias(m) || isFreeModel(m)),
+  ) as ModelInfo[];
 }
 
 /**

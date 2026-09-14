@@ -1,0 +1,7 @@
+package-lock.json
+node_modules/
+dist/
+dist-server/
+Aether-Skill-Pack/
+public/icons/
+*.md

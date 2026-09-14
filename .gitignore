@@ -24,3 +24,8 @@ dist-server/
 # Editor
 .vscode/
 .idea/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini

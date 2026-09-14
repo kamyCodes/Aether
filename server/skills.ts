@@ -1,4 +1,8 @@
 import fs from 'node:fs';
+/**
+ * SkillManager — CRUD for agent skills (markdown instruction packs) stored
+ * per-workspace; feeds the Skills panel and agent context assembly.
+ */
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
@@ -40,15 +44,22 @@ export class SkillManager {
       for (const [wsId, ids] of Object.entries(raw.projects ?? {})) {
         this.projectEnabled.set(wsId, new Set(ids));
       }
-    } catch { /* first run — defaults */ }
+    } catch {
+      /* first run — defaults */
+    }
   }
 
   private persistEnabledState() {
     try {
       const projects: Record<string, string[]> = {};
       for (const [wsId, ids] of this.projectEnabled) projects[wsId] = [...ids];
-      fs.writeFileSync(this.statePath(), JSON.stringify({ global: [...this.globalEnabled], projects }, null, 2));
-    } catch { /* best effort */ }
+      fs.writeFileSync(
+        this.statePath(),
+        JSON.stringify({ global: [...this.globalEnabled], projects }, null, 2),
+      );
+    } catch {
+      /* best effort */
+    }
   }
 
   /**
@@ -76,7 +87,8 @@ export class SkillManager {
       // Mirror the change into every project that has no override yet, so
       // global flips stay visible until the user customizes a project.
       for (const [, set] of this.projectEnabled) {
-        if (enabled) set.add(id); else set.delete(id);
+        if (enabled) set.add(id);
+        else set.delete(id);
       }
     }
     this.persistEnabledState();
@@ -96,7 +108,9 @@ export class SkillManager {
           const s = JSON.parse(await fsp.readFile(path.join(this.dir, f), 'utf8')) as Skill;
           this.cache.set(s.id, s);
           skills.push(s);
-        } catch { /* corrupt skill skipped */ }
+        } catch {
+          /* corrupt skill skipped */
+        }
       }
       return skills.sort((a, b) => b.priority - a.priority);
     } catch {
@@ -142,10 +156,23 @@ export class SkillManager {
    * skills are DISABLED by default; the user opts in per skill.
    * Returns { imported, skipped, total }.
    */
-  async importPack(packDir: string, overwrite = false): Promise<{ imported: number; skipped: number; total: number }> {
+  async importPack(
+    packDir: string,
+    overwrite = false,
+  ): Promise<{ imported: number; skipped: number; total: number }> {
     const manifestPath = path.join(packDir, 'skills-manifest.json');
     const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8')) as {
-      skills: Record<string, { name: string; file: string; category?: string; trigger?: string; summary?: string; tags?: string[] }>;
+      skills: Record<
+        string,
+        {
+          name: string;
+          file: string;
+          category?: string;
+          trigger?: string;
+          summary?: string;
+          tags?: string[];
+        }
+      >;
     };
     const entries = Object.entries(manifest.skills ?? {});
     const existing = new Set((await this.loadAll()).map((s) => s.id));
@@ -153,9 +180,16 @@ export class SkillManager {
     let imported = 0;
     let skipped = 0;
     for (const [id, meta] of entries) {
-      if (existing.has(id) && !overwrite) { skipped++; continue; }
+      if (existing.has(id) && !overwrite) {
+        skipped++;
+        continue;
+      }
       let markdown = '';
-      try { markdown = await fsp.readFile(path.join(packDir, meta.file), 'utf8'); } catch { /* missing file → still import metadata */ }
+      try {
+        markdown = await fsp.readFile(path.join(packDir, meta.file), 'utf8');
+      } catch {
+        /* missing file → still import metadata */
+      }
 
       // Split markdown body from a `--- name/description ---` frontmatter
       // header when present (the skills/ dir entries use it).
@@ -199,7 +233,9 @@ export class SkillManager {
   /** Compose the system-prompt fragment from enabled skills, highest priority first. */
   composeSystemFragment(enabledSkills: Skill[]): string {
     if (!enabledSkills.length) return '';
-    const parts: string[] = ['The following SKILLS are active for this task. Follow their instructions when relevant.'];
+    const parts: string[] = [
+      'The following SKILLS are active for this task. Follow their instructions when relevant.',
+    ];
     for (const s of enabledSkills) {
       parts.push(
         `\n=== SKILL: ${s.name} (v${s.version}) ===\n` +
@@ -293,7 +329,11 @@ const FASTAPI_EXPERT: Skill = {
   instructions:
     'Use FastAPI with APIRouter per domain. Validate all inputs with pydantic v2 models. ' +
     'Use async endpoints and async DB drivers. Return typed response models. Add OpenAPI tags and descriptions.',
-  rules: ['No raw SQL string interpolation — use parameterized queries or ORM', 'Every endpoint has a response_model', 'Errors via HTTPException with clear detail'],
+  rules: [
+    'No raw SQL string interpolation — use parameterized queries or ORM',
+    'Every endpoint has a response_model',
+    'Errors via HTTPException with clear detail',
+  ],
 };
 
 const DB_ENGINEER: Skill = {
@@ -315,7 +355,8 @@ const DB_ENGINEER: Skill = {
 const SECURITY_AUDITOR: Skill = {
   id: 'security-auditor',
   name: 'Security Auditor',
-  description: 'Reviews code for vulnerabilities: injection, auth flaws, secret leaks, unsafe deps.',
+  description:
+    'Reviews code for vulnerabilities: injection, auth flaws, secret leaks, unsafe deps.',
   version: '1.0.0',
   enabled: false,
   builtin: true,
@@ -325,7 +366,17 @@ const SECURITY_AUDITOR: Skill = {
   instructions:
     'When reviewing or writing code, check: input validation, output encoding, auth/authz on every route, ' +
     'secret management (never hardcode), dependency vulnerabilities, CORS/headers, and logging of security events.',
-  rules: ['Never commit secrets; use environment variables', 'Escape all user output', 'Deny by default on authorization checks'],
+  rules: [
+    'Never commit secrets; use environment variables',
+    'Escape all user output',
+    'Deny by default on authorization checks',
+  ],
 };
 
-export const BUILTIN_SKILLS: Skill[] = [APPLE_DESIGN, REACT_EXPERT, FASTAPI_EXPERT, DB_ENGINEER, SECURITY_AUDITOR];
+export const BUILTIN_SKILLS: Skill[] = [
+  APPLE_DESIGN,
+  REACT_EXPERT,
+  FASTAPI_EXPERT,
+  DB_ENGINEER,
+  SECURITY_AUDITOR,
+];

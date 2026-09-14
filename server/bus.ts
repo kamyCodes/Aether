@@ -1,5 +1,16 @@
+/**
+ * Event bus — single EventEmitter every server module publishes through;
+ * index.ts fans these events out to connected WebSocket clients.
+ */
 import { EventEmitter } from 'node:events';
-import type { ActivityItem, AgentQuestion, PermissionRequest, AgentTask, FileChangeEvent, UsageEvent } from '../shared/types.js';
+import type {
+  ActivityItem,
+  AgentQuestion,
+  PermissionRequest,
+  AgentTask,
+  FileChangeEvent,
+  UsageEvent,
+} from '../shared/types.js';
 
 /** Global event bus bridging backend modules to the WebSocket bridge. */
 export class Bus extends EventEmitter {}

@@ -1,4 +1,8 @@
 import fs from 'node:fs';
+/**
+ * MemoryManager — long-term per-project memory entries the agent can read
+ * and write across sessions (stored under DATA_DIR/memory).
+ */
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
@@ -27,7 +31,9 @@ export class MemoryManager {
     const hit = this.cache.get(workspaceId);
     if (hit) return hit;
     try {
-      const entries = JSON.parse(await fsp.readFile(this.file(workspaceId), 'utf8')) as MemoryEntry[];
+      const entries = JSON.parse(
+        await fsp.readFile(this.file(workspaceId), 'utf8'),
+      ) as MemoryEntry[];
       this.cache.set(workspaceId, entries);
       return entries;
     } catch {
@@ -45,13 +51,22 @@ export class MemoryManager {
   }
 
   /** Add a memory; exact duplicates are ignored. Returns the entry (or existing duplicate). */
-  async add(workspaceId: string, text: string, source: MemoryEntry['source'] = 'agent'): Promise<MemoryEntry> {
+  async add(
+    workspaceId: string,
+    text: string,
+    source: MemoryEntry['source'] = 'agent',
+  ): Promise<MemoryEntry> {
     const clean = text.trim().replace(/\s+/g, ' ');
     if (!clean) throw new Error('Memory text is empty');
     const entries = await this.load(workspaceId);
     const dup = entries.find((e) => e.text.toLowerCase() === clean.toLowerCase());
     if (dup) return dup;
-    const entry: MemoryEntry = { id: nanoid(10), text: clean.slice(0, 500), source, ts: Date.now() };
+    const entry: MemoryEntry = {
+      id: nanoid(10),
+      text: clean.slice(0, 500),
+      source,
+      ts: Date.now(),
+    };
     entries.push(entry);
     // Eviction policy: hard cap of 200 entries per workspace. On overflow the
     // OLDEST evictable entry is removed first (FIFO among agent-sourced

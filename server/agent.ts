@@ -1,8 +1,24 @@
+/**
+ * AgentEngine — the core agent loop. Takes user messages, talks to the model
+ * gateway, executes tool calls (with permission gating), and persists task
+ * state, plan artifacts, and verification entries.
+ */
 import { nanoid } from 'nanoid';
 import type {
-  ActivityItem, AgentMessage, AgentQuestion, AgentTask, AgentTaskStatus,
-  ContextReport, DiffArtifact, ImplementationPlan, PersistedTask, Skill,
-  TaskStep, UsageEvent, VerificationEntry, Walkthrough,
+  ActivityItem,
+  AgentMessage,
+  AgentQuestion,
+  AgentTask,
+  AgentTaskStatus,
+  ContextReport,
+  DiffArtifact,
+  ImplementationPlan,
+  PersistedTask,
+  Skill,
+  TaskStep,
+  UsageEvent,
+  VerificationEntry,
+  Walkthrough,
 } from '../shared/types.js';
 import type { OmniClient } from './omni.js';
 import type { ToolRegistry } from './tools.js';
@@ -54,7 +70,10 @@ export class AgentEngine {
   /** Plan-mode raw context handed to a follow-on agent task after approval. */
   private planContext = new Map<string, string | null>();
   /** Pending plan-approval resolvers for plan-mode tasks. */
-  private planApprovals = new Map<string, (approved: boolean, comments: { line: number; text: string }[]) => void>();
+  private planApprovals = new Map<
+    string,
+    (approved: boolean, comments: { line: number; text: string }[]) => void
+  >();
   // Model selection: the requested model (if any) flows straight to the
   // gateway; otherwise preferences, fallback, and finally the live catalog
   // provide the model. auto/* aliases (if the gateway offers them) pass
@@ -85,7 +104,11 @@ export class AgentEngine {
   ) {}
 
   /** Optional health monitor — set after construction (index.ts wires it). */
-  health?: { recordOutcome(model: string, ok: boolean, note?: string): void; inCooldown(model: string): boolean; healthFor(model: string): { status: string; lastError?: string } };
+  health?: {
+    recordOutcome(model: string, ok: boolean, note?: string): void;
+    inCooldown(model: string): boolean;
+    healthFor(model: string): { status: string; lastError?: string };
+  };
 
   async enqueue(opts: AgentTaskOptions): Promise<AgentTask> {
     const task: AgentTask = {
@@ -177,7 +200,11 @@ export class AgentEngine {
   }
 
   /** User approved (or rejected) a plan-mode task's Implementation Plan. */
-  approvePlan(taskId: string, approved: boolean, comments: { line: number; text: string }[] = []): boolean {
+  approvePlan(
+    taskId: string,
+    approved: boolean,
+    comments: { line: number; text: string }[] = [],
+  ): boolean {
     const resolve = this.planApprovals.get(taskId);
     if (!resolve) return false;
     this.planApprovals.delete(taskId);
@@ -214,7 +241,11 @@ export class AgentEngine {
   }
 
   /** Update a plan with revision comments (constraint text) and regenerate. */
-  async revisePlan(taskId: string, comments: { line: number; text: string }[], model?: string): Promise<boolean> {
+  async revisePlan(
+    taskId: string,
+    comments: { line: number; text: string }[],
+    model?: string,
+  ): Promise<boolean> {
     const t = this.tasks.get(taskId);
     if (!t?.plan) return false;
     // Inject comments as constraints and regenerate the plan with the model.
@@ -227,16 +258,29 @@ export class AgentEngine {
       const wsId = t.workspaceId;
       const ws = this.ws.require(wsId);
       const map = this.indexer.getCodebaseMap();
-      const sys = 'You are Aether, revising an implementation plan based on user feedback. Output ONLY the revised plan in markdown (numbered steps, files to touch, approach, and why). No preamble.';
+      const sys =
+        'You are Aether, revising an implementation plan based on user feedback. Output ONLY the revised plan in markdown (numbered steps, files to touch, approach, and why). No preamble.';
       const messages = [
         { role: 'system', content: sys },
         { role: 'system', content: `Project map:\n${map}` },
-        { role: 'user', content: `Original request: ${t.prompt}\n\nCurrent plan:\n${t.plan.raw}\n\nUser feedback to incorporate:\n${constraint}\n\nProduce the revised plan.` },
+        {
+          role: 'user',
+          content: `Original request: ${t.prompt}\n\nCurrent plan:\n${t.plan.raw}\n\nUser feedback to incorporate:\n${constraint}\n\nProduce the revised plan.`,
+        },
       ];
-      const selectable = this.omni.selectableModels.length ? this.omni.selectableModels : this.omni._modelCatalog;
-      const decision = pickModelForTask({ prompt: t.prompt, mode: 'plan', files: [], hasErrorText: false }, selectable);
+      const selectable = this.omni.selectableModels.length
+        ? this.omni.selectableModels
+        : this.omni._modelCatalog;
+      const decision = pickModelForTask(
+        { prompt: t.prompt, mode: 'plan', files: [], hasErrorText: false },
+        selectable,
+      );
       const result = await this.omni.chatStream(
-        { model: (model ?? t.model) ? this.resolveModel((model ?? t.model)!) : decision.model, messages, signal: undefined },
+        {
+          model: (model ?? t.model) ? this.resolveModel((model ?? t.model)!) : decision.model,
+          messages,
+          signal: undefined,
+        },
         { onDelta: () => {}, onUsage: () => {} },
       );
       if (result.text && result.text.length > 40) {
@@ -244,14 +288,22 @@ export class AgentEngine {
         t.plan.files = extractFilePaths(result.text);
         t.plan.revision += 1;
         t.plan.status = 'pending_approval';
-        this.activity(taskId, `Plan revised (r${t.plan.revision}) — ${comments.length} comment(s) incorporated`, 'done');
+        this.activity(
+          taskId,
+          `Plan revised (r${t.plan.revision}) — ${comments.length} comment(s) incorporated`,
+          'done',
+        );
       } else {
         t.plan.status = 'pending_approval';
         this.activity(taskId, 'Plan revision failed — keeping previous plan', 'error');
       }
     } catch (err) {
       t.plan.status = 'pending_approval';
-      this.activity(taskId, `Plan revision failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
+      this.activity(
+        taskId,
+        `Plan revision failed: ${err instanceof Error ? err.message : String(err)}`,
+        'error',
+      );
     }
     t.updatedAt = Date.now();
     emitTask({ ...t });
@@ -272,9 +324,15 @@ export class AgentEngine {
   private markStep(taskId: string, labelFragment: string, status: TaskStep['status']) {
     const t = this.tasks.get(taskId);
     if (!t) return;
-    const frag = labelFragment.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+    const frag = labelFragment
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]/g, '')
+      .trim();
     const step = t.steps.find((s) => {
-      const sl = s.label.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+      const sl = s.label
+        .toLowerCase()
+        .replace(/[^a-z0-9 ]/g, '')
+        .trim();
       return sl.includes(frag) || frag.includes(sl);
     });
     if (step && step.status !== 'done') {
@@ -303,7 +361,10 @@ export class AgentEngine {
         const ok = r.code === 0;
         const entry: VerificationEntry = {
           command: cmd,
-          output: (`exit=${r.code}\n` + [r.stdout, r.stderr].filter(Boolean).join('\n')).slice(0, 4000),
+          output: (`exit=${r.code}\n` + [r.stdout, r.stderr].filter(Boolean).join('\n')).slice(
+            0,
+            4000,
+          ),
           ok,
           ts: Date.now(),
         };
@@ -316,7 +377,12 @@ export class AgentEngine {
         return { all, firstFailure: entry };
       } catch (err) {
         const out = err instanceof Error ? err.message : String(err);
-        const entry: VerificationEntry = { command: cmd, output: out.slice(0, 4000), ok: false, ts: Date.now() };
+        const entry: VerificationEntry = {
+          command: cmd,
+          output: out.slice(0, 4000),
+          ok: false,
+          ts: Date.now(),
+        };
         all.push(entry);
         this.activity(task.id, `Verification failed: ${cmd}`, 'error');
         return { all, firstFailure: entry };
@@ -381,8 +447,18 @@ export class AgentEngine {
   }
 
   /** Agent asks the user a question; the loop awaits the answer. */
-  askQuestion(taskId: string, q: { title: string; kind: AgentQuestion['kind']; options?: AgentQuestion['options'] }): Promise<string> {
-    const question: AgentQuestion = { id: nanoid(10), taskId, title: q.title, kind: q.kind, options: q.options, ts: Date.now() };
+  askQuestion(
+    taskId: string,
+    q: { title: string; kind: AgentQuestion['kind']; options?: AgentQuestion['options'] },
+  ): Promise<string> {
+    const question: AgentQuestion = {
+      id: nanoid(10),
+      taskId,
+      title: q.title,
+      kind: q.kind,
+      options: q.options,
+      ts: Date.now(),
+    };
     this.questions.set(question.id, question);
     emitQuestion(question);
     this.setStatus(taskId, 'awaiting_question');
@@ -414,10 +490,26 @@ export class AgentEngine {
     this.persist(taskId);
   }
 
-  private activity(taskId: string, label: string, status: ActivityItem['status'], extra?: Partial<ActivityItem>) {
-    const item: ActivityItem = { id: nanoid(10), taskId, label, status, icon: status === 'done' ? '✓' : status === 'running' ? '⟳' : status === 'error' ? '✗' : '○', ts: Date.now(), ...extra };
+  private activity(
+    taskId: string,
+    label: string,
+    status: ActivityItem['status'],
+    extra?: Partial<ActivityItem>,
+  ) {
+    const item: ActivityItem = {
+      id: nanoid(10),
+      taskId,
+      label,
+      status,
+      icon: status === 'done' ? '✓' : status === 'running' ? '⟳' : status === 'error' ? '✗' : '○',
+      ts: Date.now(),
+      ...extra,
+    };
     const t = this.tasks.get(taskId);
-    if (t) { t.activity.push(item); emitTask({ ...t }); }
+    if (t) {
+      t.activity.push(item);
+      emitTask({ ...t });
+    }
     emitActivity(item);
     this.persist(taskId);
     return item;
@@ -457,8 +549,9 @@ export class AgentEngine {
     const ws = this.ws.require(wsId);
 
     // DB-backed session for this task (null when the database is unavailable)
-    const dbProjectId = await store.getProjectId(ws.root).catch(() => null)
-      ?? await store.upsertProject(ws.name, ws.root).catch(() => null);
+    const dbProjectId =
+      (await store.getProjectId(ws.root).catch(() => null)) ??
+      (await store.upsertProject(ws.name, ws.root).catch(() => null));
     const dbSessionId = await store.startSession(dbProjectId).catch(() => null);
     this.dbSessions.set(task.id, dbSessionId);
 
@@ -474,14 +567,20 @@ export class AgentEngine {
     // 1b. PLAN MODE → Implementation Plan artifact, then await approval.
     if (task.mode === 'plan') {
       const map = this.indexer.getCodebaseMap();
-      const sys = 'You are Aether, producing an implementation plan. Output ONLY the plan in markdown: a one-line goal, numbered steps, files to touch (use backtick-quoted paths), the approach, and why it works. No preamble.';
+      const sys =
+        'You are Aether, producing an implementation plan. Output ONLY the plan in markdown: a one-line goal, numbered steps, files to touch (use backtick-quoted paths), the approach, and why it works. No preamble.';
       const messages = [
         { role: 'system', content: sys },
         { role: 'system', content: `Project map:\n${map}` },
         { role: 'user', content: task.prompt },
       ];
-      const selectable = this.omni.selectableModels.length ? this.omni.selectableModels : this.omni._modelCatalog;
-      const decision = pickModelForTask({ prompt: task.prompt, mode: 'plan', files: [], hasErrorText: false }, selectable);
+      const selectable = this.omni.selectableModels.length
+        ? this.omni.selectableModels
+        : this.omni._modelCatalog;
+      const decision = pickModelForTask(
+        { prompt: task.prompt, mode: 'plan', files: [], hasErrorText: false },
+        selectable,
+      );
       const model = task.model ? this.resolveModel(task.model) : decision.model;
       this.activity(task.id, `Drafting plan with ${model}`, 'running');
       const result = await this.omni.chatStream(
@@ -501,7 +600,10 @@ export class AgentEngine {
       );
       this.streamBuf.delete(task.id);
       const raw = (result.text || '').trim();
-      if (!raw) throw new Error('Plan generation returned an empty response — check the gateway/model and retry.');
+      if (!raw)
+        throw new Error(
+          'Plan generation returned an empty response — check the gateway/model and retry.',
+        );
       const plan: ImplementationPlan = {
         id: nanoid(10),
         taskId: task.id,
@@ -514,7 +616,11 @@ export class AgentEngine {
         updatedAt: Date.now(),
       };
       task.plan = plan;
-      this.activity(task.id, `Plan drafted (r${plan.revision}, ${plan.files.length} file(s) to touch) — awaiting approval`, 'done');
+      this.activity(
+        task.id,
+        `Plan drafted (r${plan.revision}, ${plan.files.length} file(s) to touch) — awaiting approval`,
+        'done',
+      );
       this.setStatus(task.id, 'awaiting_approval');
       // Park until approve/reject arrives via REST. Rejection completes the
       // task quietly; approval hands off to a fresh agent-mode task.
@@ -535,7 +641,11 @@ export class AgentEngine {
     const enabledSkills = await this.skills.enabledFor(task.workspaceId);
     const skillFragment = this.skills.composeSystemFragment(enabledSkills);
     if (enabledSkills.length) {
-      this.activity(task.id, `Active skills: ${enabledSkills.map((s) => s.name).join(', ')}`, 'done');
+      this.activity(
+        task.id,
+        `Active skills: ${enabledSkills.map((s) => s.name).join(', ')}`,
+        'done',
+      );
       const apple = enabledSkills.find((s) => /apple/i.test(s.name));
       if (apple) this.activity(task.id, `Using active skill: ${apple.name}`, 'done');
     }
@@ -543,9 +653,14 @@ export class AgentEngine {
     // 3. Context selection: relevant files into context manager
     const relevant = this.indexer.relevantFiles(task.prompt, 10);
     for (const rel of relevant) {
-      try { this.ctx.includeFile(rel, await this.ws.readFile(wsId, rel)); } catch { /* gone */ }
+      try {
+        this.ctx.includeFile(rel, await this.ws.readFile(wsId, rel));
+      } catch {
+        /* gone */
+      }
     }
-    if (relevant.length) this.activity(task.id, `Included ${relevant.length} relevant file(s) in context`, 'done');
+    if (relevant.length)
+      this.activity(task.id, `Included ${relevant.length} relevant file(s) in context`, 'done');
 
     // 3b. TASK LIST artifact — concrete steps before any file is touched.
     if (task.mode === 'agent') {
@@ -561,11 +676,13 @@ export class AgentEngine {
 
     // 4. Build messages
     const memoryFragment = await this.memory.fragment(wsId);
-    const sys = SYSTEM_BASE
-      .replace('{DATE}', new Date().toISOString().slice(0, 10))
-      .replace('{WS}', ws.name)
-      + (skillFragment ? `\n\n${skillFragment}` : '')
-      + (memoryFragment ? `\n\n${memoryFragment}` : '');
+    const sys =
+      SYSTEM_BASE.replace('{DATE}', new Date().toISOString().slice(0, 10)).replace(
+        '{WS}',
+        ws.name,
+      ) +
+      (skillFragment ? `\n\n${skillFragment}` : '') +
+      (memoryFragment ? `\n\n${memoryFragment}` : '');
     this.ctx.systemTokens = Math.ceil(sys.length / 4);
     this.ctx.skillsTokens = Math.ceil(skillFragment.length / 4);
 
@@ -575,18 +692,44 @@ export class AgentEngine {
 
     const planFragment = this.planContext.get(task.id);
     // Plan-mode tasks returned earlier — only 'ask' and 'agent' reach here.
-    const modeInstruction: string = task.mode === 'ask'
-      ? 'MODE: ask — Answer the user\'s question about the codebase. Do not modify files.'
-      : 'MODE: agent — Autonomously complete the task using tools. Continue until done.';
+    const modeInstruction: string =
+      task.mode === 'ask'
+        ? "MODE: ask — Answer the user's question about the codebase. Do not modify files."
+        : 'MODE: agent — Autonomously complete the task using tools. Continue until done.';
 
-    const messages: { role: string; content: unknown; tool_calls?: unknown; tool_call_id?: string }[] = [
+    const messages: {
+      role: string;
+      content: unknown;
+      tool_calls?: unknown;
+      tool_call_id?: string;
+    }[] = [
       { role: 'system', content: sys },
       { role: 'system', content: `Project map:\n${map}` },
       { role: 'system', content: `Relevant files:\n${fileBlocks.text}` },
       { role: 'system', content: modeInstruction },
-      ...(planFragment ? [{ role: 'system', content: `APPROVED IMPLEMENTATION PLAN (follow it closely):\n${planFragment}` }] : []),
-      ...(task.steps.length ? [{ role: 'system', content: `TASK LIST (keep these steps in order; work through them one at a time):\n${task.steps.map((s, i) => `${i + 1}. ${s.label}`).join('\n')}` }] : []),
-      ...this.ctx.compressChat(history.map((m) => ({ role: m.role, content: m.content })), 12, 6000).map((m) => ({ role: m.role, content: m.content })),
+      ...(planFragment
+        ? [
+            {
+              role: 'system',
+              content: `APPROVED IMPLEMENTATION PLAN (follow it closely):\n${planFragment}`,
+            },
+          ]
+        : []),
+      ...(task.steps.length
+        ? [
+            {
+              role: 'system',
+              content: `TASK LIST (keep these steps in order; work through them one at a time):\n${task.steps.map((s, i) => `${i + 1}. ${s.label}`).join('\n')}`,
+            },
+          ]
+        : []),
+      ...this.ctx
+        .compressChat(
+          history.map((m) => ({ role: m.role, content: m.content })),
+          12,
+          6000,
+        )
+        .map((m) => ({ role: m.role, content: m.content })),
     ];
 
     // 5. Checkpoint before execution (agent mode)
@@ -613,14 +756,21 @@ export class AgentEngine {
 
       // Model resolution order: explicit task model (user's manual pick) →
       // automatic task-based routing → settings prefs → first catalog model.
-      const selectable = this.omni.selectableModels.length ? this.omni.selectableModels : this.omni._modelCatalog;
+      const selectable = this.omni.selectableModels.length
+        ? this.omni.selectableModels
+        : this.omni._modelCatalog;
       let autoDecision: import('../shared/types.js').RoutingDecision | null = null;
       let effective: string;
       if (task.model) {
         effective = this.resolveModel(task.model);
       } else {
         autoDecision = pickModelForTask(
-          { prompt: task.prompt, mode: task.mode, files: task.filesChanged, hasErrorText: /error/i.test(task.prompt) },
+          {
+            prompt: task.prompt,
+            mode: task.mode,
+            files: task.filesChanged,
+            hasErrorText: /error/i.test(task.prompt),
+          },
           selectable,
           // Cooldown-aware routing: models with repeated recent failures are
           // skipped straight to the next preference (no wasted round-trip).
@@ -632,26 +782,36 @@ export class AgentEngine {
         effective =
           this.resolveModel(
             this.omni.settings.modelPrefs.coding ||
-            this.omni.settings.modelPrefs.chat ||
-            this.omni.settings.fallbackModel ||
-            (this.omni._modelCatalog[0]?.id ?? ''),
+              this.omni.settings.modelPrefs.chat ||
+              this.omni.settings.fallbackModel ||
+              (this.omni._modelCatalog[0]?.id ?? ''),
           ) || '';
       }
-      if (!effective) throw new Error('No model selected. Open Settings → Aether endpoint and choose a model.');
+      if (!effective)
+        throw new Error('No model selected. Open Settings → Aether endpoint and choose a model.');
       // task.model keeps the user's originally REQUESTED model (often a combo
       // alias like auto/best-coding); it is deliberately NOT overwritten with
       // the concrete served model, because the gateway rotates routes between
       // calls and the alias re-resolves to a working route each time.
       const requestedModel = task.model;
       if (autoDecision) {
-        this.activity(task.id, `Auto-routed to ${autoDecision.model}: ${autoDecision.reason}`, 'done');
+        this.activity(
+          task.id,
+          `Auto-routed to ${autoDecision.model}: ${autoDecision.reason}`,
+          'done',
+        );
       }
       this.activity(task.id, `Using model ${effective}`, 'done');
 
       const streamStart = Date.now();
       let usageSeen = false;
       const stream = this.omni.chatStream(
-        { model: effective, messages, tools: task.mode === 'agent' ? this.tools.jsonSchema() : undefined, signal },
+        {
+          model: effective,
+          messages,
+          tools: task.mode === 'agent' ? this.tools.jsonSchema() : undefined,
+          signal,
+        },
         {
           onDelta: (d) => {
             this.streamBuf.set(task.id, (this.streamBuf.get(task.id) ?? '') + d);
@@ -668,14 +828,16 @@ export class AgentEngine {
               // cumulative thread totals for the context viewer
               this.ctx.recordThreadUsage(u.inputTokens, u.outputTokens, u.cachedInput ?? 0);
               // persist to model_usage with latency + cost from config/pricing.json
-              void store.recordModelUsage({
-                sessionId: dbSessionId,
-                actionId: this.lastActionId.get(task.id) ?? null,
-                modelName: u.model,
-                inputTokens: u.inputTokens,
-                outputTokens: u.outputTokens,
-                latencyMs: Date.now() - streamStart,
-              }).catch(() => {});
+              void store
+                .recordModelUsage({
+                  sessionId: dbSessionId,
+                  actionId: this.lastActionId.get(task.id) ?? null,
+                  modelName: u.model,
+                  inputTokens: u.inputTokens,
+                  outputTokens: u.outputTokens,
+                  latencyMs: Date.now() - streamStart,
+                })
+                .catch(() => {});
             }
           },
         },
@@ -695,12 +857,23 @@ export class AgentEngine {
         // The spinner entry created here is resolved to ✓/✗ by the caller
         // via the returned finish() callback, so a recovered retry never
         // leaves a dangling "running" item in the activity feed.
-        const effectiveAlias = requestedModel && requestedModel.startsWith('auto/') ? requestedModel : null;
+        const effectiveAlias =
+          requestedModel && requestedModel.startsWith('auto/') ? requestedModel : null;
         let finish: (ok: boolean, note: string) => void;
         if (effectiveAlias && effectiveAlias !== effective && !retryWithNext.comboRetried) {
           retryWithNext.comboRetried = true;
-          bus.emit('agent:status', { kind: 'retrying', reason: `Route ${effective} unavailable — retrying`, attempt: 1, maxAttempts: 2, ts: Date.now() });
-          const item = this.activity(task.id, `Route ${effective} failed (${cause.slice(0, 90)}) — retrying via ${effectiveAlias}`, 'running');
+          bus.emit('agent:status', {
+            kind: 'retrying',
+            reason: `Route ${effective} unavailable — retrying`,
+            attempt: 1,
+            maxAttempts: 2,
+            ts: Date.now(),
+          });
+          const item = this.activity(
+            task.id,
+            `Route ${effective} failed (${cause.slice(0, 90)}) — retrying via ${effectiveAlias}`,
+            'running',
+          );
           finish = (ok, note) => {
             item.status = ok ? 'done' : 'error';
             item.icon = ok ? '✓' : '✗';
@@ -709,13 +882,20 @@ export class AgentEngine {
           };
           try {
             const r = await this.omni.chatStream(
-              { model: effectiveAlias, messages, tools: task.mode === 'agent' ? this.tools.jsonSchema() : undefined, signal },
+              {
+                model: effectiveAlias,
+                messages,
+                tools: task.mode === 'agent' ? this.tools.jsonSchema() : undefined,
+                signal,
+              },
               {
                 onDelta: (d) => {
                   this.streamBuf.set(task.id, (this.streamBuf.get(task.id) ?? '') + d);
                   bus.emit('agent:delta', { taskId: task.id, delta: d });
                 },
-                onUsage: () => { /* counted on success in the outer loop */ },
+                onUsage: () => {
+                  /* counted on success in the outer loop */
+                },
               },
             );
             return { r, finish };
@@ -728,8 +908,18 @@ export class AgentEngine {
         if (!next) throw new Error(cause);
         // Subtle chat status line (never a bubble): the UI shows "network
         // error… retrying (1/3)"-style text while the fallback runs.
-        bus.emit('agent:status', { kind: 'retrying', reason: `Model ${effective} unavailable — retrying`, attempt: 1, maxAttempts: 2, ts: Date.now() });
-        const item = this.activity(task.id, `Model ${effective} failed (${cause.slice(0, 100)}) — retrying with ${next}`, 'running');
+        bus.emit('agent:status', {
+          kind: 'retrying',
+          reason: `Model ${effective} unavailable — retrying`,
+          attempt: 1,
+          maxAttempts: 2,
+          ts: Date.now(),
+        });
+        const item = this.activity(
+          task.id,
+          `Model ${effective} failed (${cause.slice(0, 100)}) — retrying with ${next}`,
+          'running',
+        );
         finish = (ok, note) => {
           item.status = ok ? 'done' : 'error';
           item.icon = ok ? '✓' : '✗';
@@ -738,13 +928,20 @@ export class AgentEngine {
         };
         try {
           const r = await this.omni.chatStream(
-            { model: next, messages, tools: task.mode === 'agent' ? this.tools.jsonSchema() : undefined, signal },
+            {
+              model: next,
+              messages,
+              tools: task.mode === 'agent' ? this.tools.jsonSchema() : undefined,
+              signal,
+            },
             {
               onDelta: (d) => {
                 this.streamBuf.set(task.id, (this.streamBuf.get(task.id) ?? '') + d);
                 bus.emit('agent:delta', { taskId: task.id, delta: d });
               },
-              onUsage: () => { /* counted on success in the outer loop */ },
+              onUsage: () => {
+                /* counted on success in the outer loop */
+              },
             },
           );
           task.model = next;
@@ -761,7 +958,11 @@ export class AgentEngine {
         result = await stream;
         this.health?.recordOutcome(effective, true);
       } catch (err) {
-        this.health?.recordOutcome(effective, false, err instanceof Error ? err.message : String(err));
+        this.health?.recordOutcome(
+          effective,
+          false,
+          err instanceof Error ? err.message : String(err),
+        );
         // Mid-request model failure → one retry on the next preference.
         const { r, finish } = await retryWithNext(err instanceof Error ? err.message : String(err));
         result = r;
@@ -773,7 +974,11 @@ export class AgentEngine {
       // substitute on alias resolution or rate-limit rotation).
       if (result.resolvedModel && result.resolvedModel !== effective) {
         this.activity(task.id, `Served by ${result.resolvedModel} (for ${effective})`, 'done');
-        bus.emit('agent:status', { kind: 'degraded', reason: `Routed to fallback model ${result.resolvedModel}`, ts: Date.now() });
+        bus.emit('agent:status', {
+          kind: 'degraded',
+          reason: `Routed to fallback model ${result.resolvedModel}`,
+          ts: Date.now(),
+        });
       } else if (!result.text && !result.toolCalls.length) {
         // First token latency: clear the retry status once real content lands.
         bus.emit('agent:status', null);
@@ -783,15 +988,23 @@ export class AgentEngine {
       // not an empty completion. Retry once on the next preference, then fail.
       if (!result.text && !result.toolCalls.length && !result.finish) {
         this.health?.recordOutcome(effective, false, 'empty response');
-        const { r, finish } = await retryWithNext(`Model ${effective} returned an empty response — its upstream provider is likely unavailable`);
+        const { r, finish } = await retryWithNext(
+          `Model ${effective} returned an empty response — its upstream provider is likely unavailable`,
+        );
         result = r;
         const recovered = !!(result.text || result.toolCalls.length || result.finish);
         finish(recovered, recovered ? 'answered' : 'still empty');
         if (recovered) {
           // VISIBLE fallback line in the run's System Log (spec: never silent).
-          this.activity(task.id, `Fallback used: ${effective} unavailable — served by ${result.resolvedModel ?? task.model ?? 'fallback'}`, 'done');
+          this.activity(
+            task.id,
+            `Fallback used: ${effective} unavailable — served by ${result.resolvedModel ?? task.model ?? 'fallback'}`,
+            'done',
+          );
         } else {
-          throw new Error(`Both the selected model and its fallback returned empty responses — the gateway's upstream providers are unavailable.`);
+          throw new Error(
+            `Both the selected model and its fallback returned empty responses — the gateway's upstream providers are unavailable.`,
+          );
         }
       }
       // Some gateways (OmniRoute among them) don't echo `usage` in SSE
@@ -799,16 +1012,19 @@ export class AgentEngine {
       // still captures every model call.
       if (!usageSeen) {
         const estIn = Math.ceil(JSON.stringify(messages).length / 4);
-        const estOut = Math.ceil((result.text || '').length / 4) + 8 * (result.toolCalls?.length ?? 0);
+        const estOut =
+          Math.ceil((result.text || '').length / 4) + 8 * (result.toolCalls?.length ?? 0);
         const served = result.resolvedModel ?? effective;
-        void store.recordModelUsage({
-          sessionId: dbSessionId,
-          actionId: this.lastActionId.get(task.id) ?? null,
-          modelName: served,
-          inputTokens: estIn,
-          outputTokens: estOut,
-          latencyMs: Date.now() - streamStart,
-        }).catch(() => {});
+        void store
+          .recordModelUsage({
+            sessionId: dbSessionId,
+            actionId: this.lastActionId.get(task.id) ?? null,
+            modelName: served,
+            inputTokens: estIn,
+            outputTokens: estOut,
+            latencyMs: Date.now() - streamStart,
+          })
+          .catch(() => {});
         this.recordUsage({ model: served, inputTokens: estIn, outputTokens: estOut }, task.id);
       }
       finalText = result.text;
@@ -837,11 +1053,22 @@ export class AgentEngine {
           if (failed.firstFailure && !signal.aborted) {
             if (repairRound < REPAIR_ROUNDS) {
               repairRound++;
-              this.activity(task.id, `Repair round ${repairRound}/${REPAIR_ROUNDS}: ${failed.firstFailure.command} failed — tasking the agent to fix it`, 'running');
-              this.addRepairStep(task.id, `Fix ${failed.firstFailure.command}`, failed.firstFailure.output);
+              this.activity(
+                task.id,
+                `Repair round ${repairRound}/${REPAIR_ROUNDS}: ${failed.firstFailure.command} failed — tasking the agent to fix it`,
+                'running',
+              );
+              this.addRepairStep(
+                task.id,
+                `Fix ${failed.firstFailure.command}`,
+                failed.firstFailure.output,
+              );
               messages.push(
                 { role: 'assistant', content: result.text || null },
-                { role: 'user', content: `VERIFICATION FAILED — ${failed.firstFailure.command} exited non-zero. Fix the errors, then finish. Output (trimmed):\n${failed.firstFailure.output.slice(0, 3000)}` },
+                {
+                  role: 'user',
+                  content: `VERIFICATION FAILED — ${failed.firstFailure.command} exited non-zero. Fix the errors, then finish. Output (trimmed):\n${failed.firstFailure.output.slice(0, 3000)}`,
+                },
               );
               this.setStatus(task.id, 'running');
               continue; // re-enter the loop: the model now repairs and re-verifies
@@ -861,29 +1088,66 @@ export class AgentEngine {
       }
 
       // feed tool results back
-      messages.push({ role: 'assistant', content: result.text || null, tool_calls: result.toolCalls.map((tc) => ({ id: tc.id, type: 'function', function: { name: tc.name, arguments: tc.arguments } })) });
+      messages.push({
+        role: 'assistant',
+        content: result.text || null,
+        tool_calls: result.toolCalls.map((tc) => ({
+          id: tc.id,
+          type: 'function',
+          function: { name: tc.name, arguments: tc.arguments },
+        })),
+      });
       for (const tc of result.toolCalls) {
         let args: Record<string, unknown> = {};
-        try { args = JSON.parse(tc.arguments || '{}'); } catch { /* malformed */ }
+        try {
+          args = JSON.parse(tc.arguments || '{}');
+        } catch {
+          /* malformed */
+        }
         const actionType = actionTypeFor(tc.name);
         const filePath = typeof args.path === 'string' ? (args.path as string) : null;
         // Capture the pre-edit content for the inline diff artifact.
         let preEdit: string | null = null;
-        if (filePath && (tc.name === 'write_file' || tc.name === 'edit_file' || tc.name === 'delete_file')) {
-          try { preEdit = await this.ws.readFile(wsId, filePath); } catch { preEdit = ''; }
+        if (
+          filePath &&
+          (tc.name === 'write_file' || tc.name === 'edit_file' || tc.name === 'delete_file')
+        ) {
+          try {
+            preEdit = await this.ws.readFile(wsId, filePath);
+          } catch {
+            preEdit = '';
+          }
         }
         this.advanceSteps(task.id);
         if (filePath) this.markStep(task.id, filePath, 'in_progress');
-        const out = await this.tools.run(tc.name, args, { workspaceId: wsId, taskId: task.id, cwd: ws.root, autoApprove: false, signal });
+        const out = await this.tools.run(tc.name, args, {
+          workspaceId: wsId,
+          taskId: task.id,
+          cwd: ws.root,
+          autoApprove: false,
+          signal,
+        });
         messages.push({ role: 'tool', tool_call_id: tc.id, content: out });
         this.ctx.toolsTokens += Math.ceil(out.length / 4);
         const changed = (args.path as string) ?? undefined;
         if (changed && !task.filesChanged.includes(changed)) task.filesChanged.push(changed);
         // DIFF ARTIFACT: record what changed for the inline per-file diff UI.
-        if (filePath && (tc.name === 'write_file' || tc.name === 'edit_file' || tc.name === 'delete_file')) {
+        if (
+          filePath &&
+          (tc.name === 'write_file' || tc.name === 'edit_file' || tc.name === 'delete_file')
+        ) {
           let post: string | null = null;
-          try { post = await this.ws.readFile(wsId, filePath); } catch { post = null; }
-          const artifact = buildDiffArtifact(filePath, preEdit ?? '', post, tc.name === 'delete_file');
+          try {
+            post = await this.ws.readFile(wsId, filePath);
+          } catch {
+            post = null;
+          }
+          const artifact = buildDiffArtifact(
+            filePath,
+            preEdit ?? '',
+            post,
+            tc.name === 'delete_file',
+          );
           if (artifact) {
             const prev = task.diffs?.find((d) => d.path === filePath && d.ts > Date.now() - 60_000);
             if (prev) {
@@ -900,11 +1164,24 @@ export class AgentEngine {
         // Agent-made edits bypass the REST endpoints — mirror the file into
         // the files table here so agent_actions.file_id can link to it.
         if (filePath && dbProjectId && (tc.name === 'write_file' || tc.name === 'edit_file')) {
-          await store.upsertFile(dbProjectId, filePath, typeof args.content === 'string' ? (args.content as string) : null).catch(() => {});
+          await store
+            .upsertFile(
+              dbProjectId,
+              filePath,
+              typeof args.content === 'string' ? (args.content as string) : null,
+            )
+            .catch(() => {});
         }
         // persist the action (linked to session + file) so model_usage can reference it
         const actionId = await store
-          .recordAgentAction({ sessionId: dbSessionId, actionType, filePath, projectId: dbProjectId, prompt: tc.name, result: out.slice(0, 8000) })
+          .recordAgentAction({
+            sessionId: dbSessionId,
+            actionType,
+            filePath,
+            projectId: dbProjectId,
+            prompt: tc.name,
+            result: out.slice(0, 8000),
+          })
           .catch(() => null);
         if (actionId) this.lastActionId.set(task.id, actionId);
         this.dbActions.set(task.id, actionId);
@@ -926,7 +1203,12 @@ export class AgentEngine {
     const walkthrough: Walkthrough = {
       title: task.title,
       summary: finalText || 'Task completed.',
-      changes: (task.diffs ?? []).map((d) => ({ path: d.path, status: d.status, additions: d.additions, deletions: d.deletions })),
+      changes: (task.diffs ?? []).map((d) => ({
+        path: d.path,
+        status: d.status,
+        additions: d.additions,
+        deletions: d.deletions,
+      })),
       verification,
       completedAt: Date.now(),
     };
@@ -942,20 +1224,33 @@ export class AgentEngine {
 
   /** Ask the model for a concrete, watchable step list for this task. */
   private async generateSteps(task: AgentTask): Promise<TaskStep[]> {
-    const selectable = this.omni.selectableModels.length ? this.omni.selectableModels : this.omni._modelCatalog;
-    const decision = pickModelForTask({ prompt: task.prompt, mode: 'planning' as never, files: [], hasErrorText: false }, selectable);
+    const selectable = this.omni.selectableModels.length
+      ? this.omni.selectableModels
+      : this.omni._modelCatalog;
+    const decision = pickModelForTask(
+      { prompt: task.prompt, mode: 'planning' as never, files: [], hasErrorText: false },
+      selectable,
+    );
     const model = task.model ? this.resolveModel(task.model) : decision.model;
     const ws = this.ws.require(task.workspaceId);
-    const map = this.indexer.getCodebaseMap();      const result = await this.omni.chatStream(
-        {
-          model,
-          messages: [
-            { role: 'system', content: 'You break coding tasks into concrete steps. Output ONLY a JSON array of 2-6 short step strings, e.g. ["read package.json","identify dependency issues","summarize findings"]. No other text.' },
-            { role: 'user', content: `Workspace: ${ws.name}\nProject map (excerpt):\n${map.slice(0, 3000)}\n\nTask: ${task.prompt}` },
-          ],
-        },
-        { onDelta: () => {}, onUsage: () => {} },
-      );
+    const map = this.indexer.getCodebaseMap();
+    const result = await this.omni.chatStream(
+      {
+        model,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You break coding tasks into concrete steps. Output ONLY a JSON array of 2-6 short step strings, e.g. ["read package.json","identify dependency issues","summarize findings"]. No other text.',
+          },
+          {
+            role: 'user',
+            content: `Workspace: ${ws.name}\nProject map (excerpt):\n${map.slice(0, 3000)}\n\nTask: ${task.prompt}`,
+          },
+        ],
+      },
+      { onDelta: () => {}, onUsage: () => {} },
+    );
     const text = (result.text || '').trim();
     const match = text.match(/\[[\s\S]*\]/);
     if (!match) return [];
@@ -967,8 +1262,17 @@ export class AgentEngine {
       .map((label) => ({ id: nanoid(8), label, status: 'pending' as const }));
   }
 
-  private recordUsage(u: { model: string; inputTokens: number; outputTokens: number }, taskId: string) {
-    const ev: UsageEvent = { model: u.model, inputTokens: u.inputTokens, outputTokens: u.outputTokens, kind: 'agent', ts: Date.now() };
+  private recordUsage(
+    u: { model: string; inputTokens: number; outputTokens: number },
+    taskId: string,
+  ) {
+    const ev: UsageEvent = {
+      model: u.model,
+      inputTokens: u.inputTokens,
+      outputTokens: u.outputTokens,
+      kind: 'agent',
+      ts: Date.now(),
+    };
     emitUsage(ev);
   }
 
@@ -992,7 +1296,12 @@ function actionTypeFor(toolName: string): string {
 }
 
 /** Build a DiffArtifact from pre/post content (null when nothing changed). */
-function buildDiffArtifact(path: string, oldC: string, newC: string | null, deleted: boolean): DiffArtifact | null {
+function buildDiffArtifact(
+  path: string,
+  oldC: string,
+  newC: string | null,
+  deleted: boolean,
+): DiffArtifact | null {
   const status: DiffArtifact['status'] = deleted ? 'deleted' : oldC === '' ? 'added' : 'modified';
   if (!deleted && newC === oldC) return null;
   const oldLines = oldC.split('\n');
@@ -1001,7 +1310,16 @@ function buildDiffArtifact(path: string, oldC: string, newC: string | null, dele
   const newSet = new Set(newLines);
   const additions = newLines.filter((l) => !oldSet.has(l) && l !== '').length;
   const deletions = oldLines.filter((l) => !newSet.has(l) && l !== '').length;
-  return { id: nanoid(10), path, status, additions, deletions, oldContent: oldC, newContent: deleted ? '' : (newC ?? ''), ts: Date.now() };
+  return {
+    id: nanoid(10),
+    path,
+    status,
+    additions,
+    deletions,
+    oldContent: oldC,
+    newContent: deleted ? '' : (newC ?? ''),
+    ts: Date.now(),
+  };
 }
 
 /** Extract backtick-quoted file paths from a plan's markdown. */

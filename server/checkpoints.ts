@@ -1,4 +1,8 @@
 import fs from 'node:fs';
+/**
+ * CheckpointManager — persisted snapshots of task state so an agent run can
+ * be resumed (or rolled back) after a crash or restart.
+ */
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { nanoid } from 'nanoid';
@@ -22,7 +26,12 @@ export class CheckpointManager {
     return d;
   }
 
-  async create(workspaceId: string, files: { path: string; content: string | null }[], label: string, auto: boolean): Promise<Checkpoint> {
+  async create(
+    workspaceId: string,
+    files: { path: string; content: string | null }[],
+    label: string,
+    auto: boolean,
+  ): Promise<Checkpoint> {
     const cp: Checkpoint = {
       id: nanoid(10),
       workspaceId,
@@ -32,7 +41,9 @@ export class CheckpointManager {
       files: files.map((f) => ({
         path: f.path,
         content: f.content,
-        hash: Buffer.from(f.content ?? '').toString('base64').slice(0, 16),
+        hash: Buffer.from(f.content ?? '')
+          .toString('base64')
+          .slice(0, 16),
       })),
     };
     await fsp.writeFile(path.join(this.dirFor(workspaceId), `${cp.id}.json`), JSON.stringify(cp));
@@ -45,7 +56,12 @@ export class CheckpointManager {
       const cps = await Promise.all(
         files
           .filter((f) => f.endsWith('.json'))
-          .map(async (f) => JSON.parse(await fsp.readFile(path.join(this.dirFor(workspaceId), f), 'utf8')) as Checkpoint),
+          .map(
+            async (f) =>
+              JSON.parse(
+                await fsp.readFile(path.join(this.dirFor(workspaceId), f), 'utf8'),
+              ) as Checkpoint,
+          ),
       );
       return cps.sort((a, b) => b.createdAt - a.createdAt);
     } catch {
@@ -55,7 +71,9 @@ export class CheckpointManager {
 
   async get(workspaceId: string, id: string): Promise<Checkpoint | null> {
     try {
-      return JSON.parse(await fsp.readFile(path.join(this.dirFor(workspaceId), `${id}.json`), 'utf8')) as Checkpoint;
+      return JSON.parse(
+        await fsp.readFile(path.join(this.dirFor(workspaceId), `${id}.json`), 'utf8'),
+      ) as Checkpoint;
     } catch {
       return null;
     }

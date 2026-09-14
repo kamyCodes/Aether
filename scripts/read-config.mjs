@@ -13,7 +13,11 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG_TS = path.join(ROOT, 'server', 'config.ts');
 
 function readConfigSource() {
-  try { return fs.readFileSync(CONFIG_TS, 'utf8'); } catch { return ''; }
+  try {
+    return fs.readFileSync(CONFIG_TS, 'utf8');
+  } catch {
+    return '';
+  }
 }
 
 /** Numeric default declared as `portEnv('NAME', <num>)` (or `NAME = <num>`).
@@ -21,9 +25,13 @@ function readConfigSource() {
 export function configDefault(name) {
   const env = Number(process.env[name]);
   if (Number.isInteger(env) && env > 0) return env;
-  const m = readConfigSource().match(new RegExp(`portEnv\\('${name}',\\s*(\\d+)\\)`))
-    ?? readConfigSource().match(new RegExp(`\\b${name}\\s*=\\s*(\\d+)\\b`));
-  if (!m) throw new Error(`config default '${name}' not found in server/config.ts — the resolver is the only declaration site`);
+  const m =
+    readConfigSource().match(new RegExp(`portEnv\\('${name}',\\s*(\\d+)\\)`)) ??
+    readConfigSource().match(new RegExp(`\\b${name}\\s*=\\s*(\\d+)\\b`));
+  if (!m)
+    throw new Error(
+      `config default '${name}' not found in server/config.ts — the resolver is the only declaration site`,
+    );
   return Number(m[1]);
 }
 
@@ -31,6 +39,9 @@ export function configDefault(name) {
 export function hostDefault() {
   if (process.env.HOST) return process.env.HOST;
   const m = readConfigSource().match(/export const HOST = process\.env\.HOST \?\? '([^']+)'/);
-  if (!m) throw new Error('HOST default not found in server/config.ts — the resolver is the only declaration site');
+  if (!m)
+    throw new Error(
+      'HOST default not found in server/config.ts — the resolver is the only declaration site',
+    );
   return m[1];
 }

@@ -1,4 +1,8 @@
 import { spawn } from 'node:child_process';
+/**
+ * TerminalManager — PTY session lifecycle (node-pty) for the integrated
+ * terminal panel. One process per session, streamed over the WebSocket bus.
+ */
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -50,7 +54,11 @@ export class TerminalManager {
     } catch {
       this.ptyAvailable = false;
     }
-    try { fs.mkdirSync(this.initDir, { recursive: true }); } catch { /* tmp */ }
+    try {
+      fs.mkdirSync(this.initDir, { recursive: true });
+    } catch {
+      /* tmp */
+    }
   }
 
   create(cwd: string, title?: string): TermSession {
@@ -75,7 +83,10 @@ export class TerminalManager {
         // command text (full 633;E reporting needs deeper shell hooks).
         for (const ch of data) {
           if (ch === '\r') {
-            if (session.history[session.history.length - 1] !== pendingInput.current && pendingInput.current.trim()) {
+            if (
+              session.history[session.history.length - 1] !== pendingInput.current &&
+              pendingInput.current.trim()
+            ) {
               session.history.push(pendingInput.current);
               const last = session.commands[session.commands.length - 1];
               if (last && !last.command) last.command = pendingInput.current;
@@ -142,9 +153,14 @@ export class TerminalManager {
             } as Record<string, string>,
           });
           proc = p;
-          (session as TermSession & { ptyWrite?: (d: string) => void }).ptyWrite = (d: string) => p.write(d);
+          (session as TermSession & { ptyWrite?: (d: string) => void }).ptyWrite = (d: string) =>
+            p.write(d);
           session.resize = (cols, rows) => {
-            try { p.resize(cols, rows); } catch { /* dead */ }
+            try {
+              p.resize(cols, rows);
+            } catch {
+              /* dead */
+            }
           };
           p.onData((d) => this.ingest(session, d));
           p.onExit(() => emitter.emit('exit'));
@@ -235,7 +251,12 @@ export class TerminalManager {
       const kind = m[1];
       const payload = m[2] ?? '';
       if (kind === 'A') {
-        session.commands.push({ command: '', exitCode: null, cwd: session.currentCwd, startedAt: Date.now() });
+        session.commands.push({
+          command: '',
+          exitCode: null,
+          cwd: session.currentCwd,
+          startedAt: Date.now(),
+        });
         if (session.commands.length > MAX_HISTORY) session.commands.shift();
         session.emitter.emit('command-started', session.commands[session.commands.length - 1]);
       } else if (kind === 'C') {
@@ -298,7 +319,10 @@ export class TerminalManager {
     p.stdout?.on('data', (d) => this.ingest(session, d.toString()));
     p.stderr?.on('data', (d) => this.ingest(session, d.toString()));
     p.on('exit', () => session.emitter.emit('exit'));
-    session.emitter.emit('data', `\r\n[fallback shell — limited interactivity] ${path.basename(cwd)} $\r\n`);
+    session.emitter.emit(
+      'data',
+      `\r\n[fallback shell — limited interactivity] ${path.basename(cwd)} $\r\n`,
+    );
   }
 
   kill(id: string) {
@@ -310,11 +334,18 @@ export class TerminalManager {
   }
 
   /** One-shot command execution for agent tools; captures stdout/stderr/exit code. */
-  exec(command: string, cwd: string, timeoutMs = 120_000, signal?: AbortSignal): Promise<{ code: number; stdout: string; stderr: string }> {
+  exec(
+    command: string,
+    cwd: string,
+    timeoutMs = 120_000,
+    signal?: AbortSignal,
+  ): Promise<{ code: number; stdout: string; stderr: string }> {
     return new Promise((resolve) => {
-      const shell = os.platform() === 'win32' ? ['powershell.exe', '-Command'] : ['/bin/bash', '-c'];
+      const shell =
+        os.platform() === 'win32' ? ['powershell.exe', '-Command'] : ['/bin/bash', '-c'];
       const child = spawn(shell[0], [shell[1], command], { cwd, env: process.env });
-      let stdout = '', stderr = '';
+      let stdout = '',
+        stderr = '';
       const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
       const onAbort = () => child.kill('SIGKILL');
       signal?.addEventListener('abort', onAbort);

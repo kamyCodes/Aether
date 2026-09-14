@@ -41,7 +41,9 @@ const MOCK_MARKER = /(^|[:\/\s])mock([-_:\s]|$)|mock[-_ ]?(coder|gateway|omni|ro
  * Pure detection function — unit-testable against sample catalogs.
  * Returns every signal that fires; `isMock` is true if ANY signal fires.
  */
-export function detectMockGateway(models: { id: string; owned_by?: string; name?: string }[]): MockGuardVerdict {
+export function detectMockGateway(
+  models: { id: string; owned_by?: string; name?: string }[],
+): MockGuardVerdict {
   const signals: MockGuardSignal[] = [];
   const ids = models.map((m) => m.id);
 
@@ -59,7 +61,10 @@ export function detectMockGateway(models: { id: string; owned_by?: string; name?
   }
 
   const marked = models.filter(
-    (m) => MOCK_MARKER.test(m.id) || MOCK_MARKER.test(m.owned_by ?? '') || MOCK_MARKER.test(m.name ?? ''),
+    (m) =>
+      MOCK_MARKER.test(m.id) ||
+      MOCK_MARKER.test(m.owned_by ?? '') ||
+      MOCK_MARKER.test(m.name ?? ''),
   );
   if (marked.length) {
     signals.push({
@@ -99,6 +104,8 @@ export function enforceMockGuard(
   const line = `[omni] MOCK-GATEWAY GUARD: ${verdict.summary} — baseUrl: ${baseUrl}`;
   if (mode === 'fail') throw new Error(line);
   console.error(`${line}`);
-  console.error('[omni] Every task will be served by this mock until the real gateway is reachable. Set OMNIROUTE_MOCK_GUARD=fail to make this fatal.');
+  console.error(
+    '[omni] Every task will be served by this mock until the real gateway is reachable. Set OMNIROUTE_MOCK_GUARD=fail to make this fatal.',
+  );
   return verdict;
 }

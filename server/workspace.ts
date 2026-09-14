@@ -1,4 +1,8 @@
 import { EventEmitter } from 'node:events';
+/**
+ * WorkspaceManager — file operations for one open workspace root: tree
+ * listing (.gitignore-aware), read/write, move/rename, and FS watching.
+ */
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -38,7 +42,9 @@ export class WorkspaceManager extends EventEmitter {
       const entries = [...this.workspaces.values()].map((w) => ({ root: w.root, name: w.name }));
       fs.writeFileSync(tmp, JSON.stringify(entries, null, 2));
       fs.renameSync(tmp, target);
-    } catch { /* best effort */ }
+    } catch {
+      /* best effort */
+    }
   }
 
   /** Re-open workspaces from ~/.aether/workspaces.json on boot (skips missing dirs).
@@ -46,11 +52,21 @@ export class WorkspaceManager extends EventEmitter {
   async restoreRegistry(): Promise<number> {
     let restored = 0;
     try {
-      const entries = JSON.parse(fs.readFileSync(this.registryPath(), 'utf8')) as { root: string; name?: string }[];
+      const entries = JSON.parse(fs.readFileSync(this.registryPath(), 'utf8')) as {
+        root: string;
+        name?: string;
+      }[];
       for (const e of entries) {
-        try { await this.addWorkspace(e.root, e.name); restored++; } catch { /* directory gone since last run */ }
+        try {
+          await this.addWorkspace(e.root, e.name);
+          restored++;
+        } catch {
+          /* directory gone since last run */
+        }
       }
-    } catch { /* no registry file yet */ }
+    } catch {
+      /* no registry file yet */
+    }
     return restored;
   }
 
@@ -61,8 +77,24 @@ export class WorkspaceManager extends EventEmitter {
 
   private readIgnore(root: string): (p: string) => boolean {
     const positives: string[] = [
-      'node_modules/**', 'node_modules', '.git/**', '.git', 'dist/**', 'dist', 'build/**', 'build', 'out/**', 'out',
-      '.next/**', '.next', '.cache/**', 'coverage/**', '__pycache__/**', '__pycache__', '.venv/**', '.venv',
+      'node_modules/**',
+      'node_modules',
+      '.git/**',
+      '.git',
+      'dist/**',
+      'dist',
+      'build/**',
+      'build',
+      'out/**',
+      'out',
+      '.next/**',
+      '.next',
+      '.cache/**',
+      'coverage/**',
+      '__pycache__/**',
+      '__pycache__',
+      '.venv/**',
+      '.venv',
     ];
     const negatives: string[] = [];
     try {
@@ -75,7 +107,9 @@ export class WorkspaceManager extends EventEmitter {
         if (l.startsWith('!')) negatives.push(l.slice(1));
         else positives.push(l);
       }
-    } catch { /* none */ }
+    } catch {
+      /* none */
+    }
     // Match positives and negatives separately: passing negation patterns
     // into a single picomatch() call inverts the matcher's semantics and
     // wrongly ignores every path that doesn't match anything.
@@ -122,7 +156,10 @@ export class WorkspaceManager extends EventEmitter {
   /** Remove a workspace: stops its watcher and updates the persisted registry. */
   removeWorkspace(id: string) {
     const watcher = this.watchers.get(id);
-    if (watcher) { void watcher.close(); this.watchers.delete(id); }
+    if (watcher) {
+      void watcher.close();
+      this.watchers.delete(id);
+    }
     this.workspaces.delete(id);
     this.persistRegistry();
   }
@@ -159,7 +196,11 @@ export class WorkspaceManager extends EventEmitter {
     watcher.on('all', (ev: string, p: string) => {
       const rel = path.relative(ws.root, p).split(path.sep).join('/');
       if (!rel) return;
-      const change: FileChangeEvent = { workspaceId: id, path: rel, type: ev as FileChangeEvent['type'] };
+      const change: FileChangeEvent = {
+        workspaceId: id,
+        path: rel,
+        type: ev as FileChangeEvent['type'],
+      };
       this.emit('fs:change', change);
     });
     this.watchers.set(id, watcher);
@@ -172,8 +213,18 @@ export class WorkspaceManager extends EventEmitter {
       const abs = path.join(ws.root, rel);
       const name = rel ? path.basename(rel) : path.basename(ws.root);
       let entries: fs.Dirent[] = [];
-      try { entries = await fsp.readdir(abs, { withFileTypes: true }); } catch { /* perm */ }
-      entries.sort((a, b) => (a.isDirectory() === b.isDirectory() ? a.name.localeCompare(b.name) : a.isDirectory() ? -1 : 1));
+      try {
+        entries = await fsp.readdir(abs, { withFileTypes: true });
+      } catch {
+        /* perm */
+      }
+      entries.sort((a, b) =>
+        a.isDirectory() === b.isDirectory()
+          ? a.name.localeCompare(b.name)
+          : a.isDirectory()
+            ? -1
+            : 1,
+      );
       const children: FileNode[] = [];
       let count = 0;
       for (const e of entries) {
@@ -187,7 +238,11 @@ export class WorkspaceManager extends EventEmitter {
           }
         } else {
           let size: number | undefined;
-          try { size = (await fsp.stat(path.join(ws.root, crel))).size; } catch { /* gone */ }
+          try {
+            size = (await fsp.stat(path.join(ws.root, crel))).size;
+          } catch {
+            /* gone */
+          }
           children.push({ name: e.name, path: crel, type: 'file', size });
           count++;
         }
@@ -226,7 +281,8 @@ export class WorkspaceManager extends EventEmitter {
 
   safeJoin(root: string, rel: string): string {
     const abs = path.resolve(root, rel);
-    if (abs !== root && !abs.startsWith(root + path.sep)) throw new Error(`Path escapes workspace: ${rel}`);
+    if (abs !== root && !abs.startsWith(root + path.sep))
+      throw new Error(`Path escapes workspace: ${rel}`);
     return abs;
   }
 
@@ -237,7 +293,11 @@ export class WorkspaceManager extends EventEmitter {
     const walk = async (rel: string) => {
       if (out.length >= cap) return;
       let entries: fs.Dirent[] = [];
-      try { entries = await fsp.readdir(path.join(ws.root, rel || '.'), { withFileTypes: true }); } catch { return; }
+      try {
+        entries = await fsp.readdir(path.join(ws.root, rel || '.'), { withFileTypes: true });
+      } catch {
+        return;
+      }
       for (const e of entries) {
         if (out.length >= cap) return;
         const crel = rel ? `${rel}/${e.name}` : e.name;

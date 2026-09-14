@@ -14,7 +14,9 @@ import { execFileSync } from 'node:child_process';
 import { rgPath } from '@vscode/ripgrep';
 
 const ROOT = path.resolve(process.argv[2] ?? '.');
-const ALLOW_PATH = path.resolve(process.argv[3] ?? path.join(ROOT, 'scripts', 'audit-allowlist.json'));
+const ALLOW_PATH = path.resolve(
+  process.argv[3] ?? path.join(ROOT, 'scripts', 'audit-allowlist.json'),
+);
 
 /** ripgrep type flags. NOTE: rg's `ts` type already covers *.ts AND *.tsx
  *  (`js` covers *.js, *.jsx, *.mjs), and type flags OR together while globs
@@ -25,11 +27,23 @@ const SRC = ['-t', 'ts', '-t', 'js', '-t', 'json'];
 /** Generated artifacts are audited at the source: they are rebuilt from the
  *  files this gate scans and would otherwise shadow real violations. */
 const ARTIFACT_GLOBS = [
-  '-g', '!node_modules/**', '-g', '!dist/**', '-g', '!dist-server/**',
-  '-g', '!release/**', '-g', '!coverage/**', '-g', '!audit-evidence/**',
-  // The audit report + its evidence quote the violation patterns verbatim —
-  // it is an output of the audit, not scanned input for it.
-  '-g', '!report/**',
+  '-g',
+  '!node_modules/**',
+  '-g',
+  '!dist/**',
+  '-g',
+  '!dist-server/**',
+  '-g',
+  '!release/**',
+  '-g',
+  '!coverage/**',
+  '-g',
+  '!audit-evidence/**',
+  // The audit report + its evidence (archived under docs/archive/) quote the
+  // violation patterns verbatim — it is an output of the audit, not scanned
+  // input for it.
+  '-g',
+  '!docs/archive/**',
 ];
 const applyGlobs = (args) => [...args, ...ARTIFACT_GLOBS];
 
@@ -40,19 +54,27 @@ const CHECKS = [
   ['S1.unix-home-path', '/home/[a-zA-Z0-9_]+', SRC],
   ['S1.quoted-drive-letter', '"[A-Za-z]:\\\\', SRC],
   ['S1.concat-literal-slash', '\\+\\s*[\'"]/[a-zA-Z]', SRC],
-  ['S1.tilde-home-literal', "(path\\.(join|resolve)\\([^)]*)['\"]~/", SRC],
+  ['S1.tilde-home-literal', '(path\\.(join|resolve)\\([^)]*)[\'"]~/', SRC],
   // S2 — hardcoded ports / hosts (allowed only in the single config module)
   ['S2.hardcoded-port', ':[0-9]{4,5}[^0-9]', SRC],
   ['S2.localhost', 'localhost', SRC],
   ['S2.loopback-ip', '127\\.0\\.0\\.1', SRC],
   // S3 — secrets
-  ['S3.credential-assignment', '(api[_-]?key|secret|token|password)\\s*[:=]\\s*["\'][A-Za-z0-9]{10,}', SRC],
+  [
+    'S3.credential-assignment',
+    '(api[_-]?key|secret|token|password)\\s*[:=]\\s*["\'][A-Za-z0-9]{10,}',
+    SRC,
+  ],
   ['S3.openai-key-shape', 'sk-[A-Za-z0-9]{20,}', []],
   // S4 — model id literals (allowed only in the settings-schema default module)
   ['S4.model-id-literals', '"(gpt-|claude-|mock-|mini|coder)"', SRC],
   // S5 — mocks/stubs/placeholders + unfinished-work markers
   // --pcre2: the fake(?!r) lookahead needs the PCRE2 engine (@vscode/ripgrep ships it).
-  ['S5.mock-stub-placeholder', 'mock|stub|dummy|fake(?!r)', ['--pcre2', '-i', '-t', 'ts', '-t', 'js', '-t', 'json']],
+  [
+    'S5.mock-stub-placeholder',
+    'mock|stub|dummy|fake(?!r)',
+    ['--pcre2', '-i', '-t', 'ts', '-t', 'js', '-t', 'json'],
+  ],
   ['S5.todo-markers', 'TODO|FIXME|HACK|XXX', []],
   ['S5.not-implemented', 'throw new Error\\("not implemented"\\)|NotImplementedError', []],
   // S6 — dead flags / env feature switches
@@ -63,7 +85,11 @@ const CHECKS = [
 ];
 
 let allow = { allowFiles: {}, allowMatches: {} };
-try { allow = JSON.parse(fs.readFileSync(ALLOW_PATH, 'utf8')); } catch { /* empty allowlist */ }
+try {
+  allow = JSON.parse(fs.readFileSync(ALLOW_PATH, 'utf8'));
+} catch {
+  /* empty allowlist */
+}
 
 let failures = 0;
 const lines = [];

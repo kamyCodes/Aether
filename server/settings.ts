@@ -1,4 +1,8 @@
 import fs from 'node:fs';
+/**
+ * SettingsStore — persisted app settings (UI theme, model preferences,
+ * autonomy, analytics consent) under DATA_DIR/settings.json.
+ */
 import path from 'node:path';
 import type { AppSettings, Analytics } from '../shared/types.js';
 import { DATA_DIR } from './dataDir.js';
@@ -25,7 +29,11 @@ const DEFAULTS: AppSettings = {
     font: 'default',
   },
   agent: {
-    autonomy: { mode: 'review', allowPrefixes: ['npm test', 'npm run', 'git status', 'git log', 'git diff'], denyPrefixes: [] },
+    autonomy: {
+      mode: 'review',
+      allowPrefixes: ['npm test', 'npm run', 'git status', 'git log', 'git diff'],
+      denyPrefixes: [],
+    },
   },
 };
 
@@ -47,7 +55,11 @@ export class SettingsStore {
     // (e.g. "ui": null). Treat every branch as optional before spreading.
     if (typeof loaded !== 'object' || loaded === null || Array.isArray(loaded)) loaded = {};
     this.settings = {
-      omni: { ...DEFAULTS.omni, ...loaded.omni, modelPrefs: { ...DEFAULTS.omni.modelPrefs, ...loaded.omni?.modelPrefs } },
+      omni: {
+        ...DEFAULTS.omni,
+        ...loaded.omni,
+        modelPrefs: { ...DEFAULTS.omni.modelPrefs, ...loaded.omni?.modelPrefs },
+      },
       ui: { ...DEFAULTS.ui, ...loaded.ui },
       agent: { autonomy: { ...DEFAULTS.agent.autonomy, ...loaded.agent?.autonomy } },
     };
@@ -72,7 +84,9 @@ export class SettingsStore {
           sleepSync(10 * 2 ** attempt + Math.random() * 10);
           continue;
         }
-        throw new Error(`settings read failed for ${file}: ${e instanceof Error ? e.message : String(e)}`);
+        throw new Error(
+          `settings read failed for ${file}: ${e instanceof Error ? e.message : String(e)}`,
+        );
       }
     }
   }
@@ -99,11 +113,17 @@ export class SettingsStore {
           for (let cAttempt = 0; ; cAttempt++) {
             try {
               fs.copyFileSync(tmp, file);
-              try { fs.unlinkSync(tmp); } catch { /* best effort */ }
+              try {
+                fs.unlinkSync(tmp);
+              } catch {
+                /* best effort */
+              }
               return;
             } catch (ce) {
               if (cAttempt >= 8) {
-                throw new Error(`settings write failed for ${file}: ${(ce as NodeJS.ErrnoException).code ?? ''} ${ce instanceof Error ? ce.message : String(ce)}`);
+                throw new Error(
+                  `settings write failed for ${file}: ${(ce as NodeJS.ErrnoException).code ?? ''} ${ce instanceof Error ? ce.message : String(ce)}`,
+                );
               }
               sleepSync(10 * 2 ** cAttempt + Math.random() * 10);
             }
@@ -127,7 +147,9 @@ export class SettingsStore {
     this.analytics.tokensOut += output;
     this.analytics.calls += 1;
     const m = this.analytics.byModel[model] ?? { in: 0, out: 0, calls: 0 };
-    m.in += input; m.out += output; m.calls += 1;
+    m.in += input;
+    m.out += output;
+    m.calls += 1;
     this.analytics.byModel[model] = m;
     this.saveAnalytics();
   }

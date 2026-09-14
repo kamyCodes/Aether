@@ -1,3 +1,8 @@
+/**
+ * Data-access layer over the SQLite db: typed row shapes plus all queries
+ * for tasks, usage, and pricing snapshots. Only module that touches db.ts
+ * directly besides index.ts bootstrap.
+ */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,9 +17,13 @@ type PricingEntry = { input: number; output: number };
 const pricingFile = path.join(projectRoot(), 'config', 'pricing.json');
 let pricing: Record<string, PricingEntry> = {};
 try {
-  pricing = (JSON.parse(fs.readFileSync(pricingFile, 'utf8')) as { models: Record<string, PricingEntry> }).models;
+  pricing = (
+    JSON.parse(fs.readFileSync(pricingFile, 'utf8')) as { models: Record<string, PricingEntry> }
+  ).models;
 } catch (err) {
-  console.error(`[db] could not load config/pricing.json — costs will be 0: ${err instanceof Error ? err.message : String(err)}`);
+  console.error(
+    `[db] could not load config/pricing.json — costs will be 0: ${err instanceof Error ? err.message : String(err)}`,
+  );
 }
 
 /** Longest-prefix match: 'gpt-4o' wins over 'gpt-4' for 'gpt-4o-mini'. */
@@ -35,7 +44,9 @@ export function estimateCost(model: string, inputTokens: number, outputTokens: n
 
 export async function getProjectId(rootPath: string): Promise<number | null> {
   if (!isDbReady()) return null;
-  const rows = await dbRows<{ id: number }>('SELECT id FROM projects WHERE root_path = $1', [rootPath]);
+  const rows = await dbRows<{ id: number }>('SELECT id FROM projects WHERE root_path = $1', [
+    rootPath,
+  ]);
   return rows[0]?.id ?? null;
 }
 
@@ -52,7 +63,11 @@ export async function upsertProject(name: string, rootPath: string, language?: s
 
 // ---------- Files ----------
 
-export async function upsertFile(projectId: number | null, relPath: string, content: string | null) {
+export async function upsertFile(
+  projectId: number | null,
+  relPath: string,
+  content: string | null,
+) {
   if (!isDbReady() || !projectId) return null;
   const r = await dbExec(
     `INSERT INTO files (project_id, path, content, last_modified) VALUES ($1, $2, $3, NOW())
@@ -65,7 +80,10 @@ export async function upsertFile(projectId: number | null, relPath: string, cont
 
 export async function getFileId(projectId: number, relPath: string): Promise<number | null> {
   if (!isDbReady()) return null;
-  const rows = await dbRows<{ id: number }>('SELECT id FROM files WHERE project_id = $1 AND path = $2', [projectId, relPath]);
+  const rows = await dbRows<{ id: number }>(
+    'SELECT id FROM files WHERE project_id = $1 AND path = $2',
+    [projectId, relPath],
+  );
   return rows[0]?.id ?? null;
 }
 
@@ -73,13 +91,22 @@ export async function getFileId(projectId: number, relPath: string): Promise<num
 
 export async function startSession(projectId: number | null): Promise<number | null> {
   if (!isDbReady()) return null;
-  const r = await dbExec('INSERT INTO sessions (project_id, status) VALUES ($1, $2) RETURNING id', [projectId, 'active']);
+  const r = await dbExec('INSERT INTO sessions (project_id, status) VALUES ($1, $2) RETURNING id', [
+    projectId,
+    'active',
+  ]);
   return r?.rows[0]?.id ?? null;
 }
 
-export async function endSession(sessionId: number | null, status: 'completed' | 'failed' | 'cancelled') {
+export async function endSession(
+  sessionId: number | null,
+  status: 'completed' | 'failed' | 'cancelled',
+) {
   if (!isDbReady() || !sessionId) return;
-  await dbExec(`UPDATE sessions SET ended_at = NOW(), status = $2 WHERE id = $1`, [sessionId, status]);
+  await dbExec(`UPDATE sessions SET ended_at = NOW(), status = $2 WHERE id = $1`, [
+    sessionId,
+    status,
+  ]);
 }
 
 // ---------- Agent actions ----------
@@ -155,11 +182,17 @@ export async function recordGitCommit(opts: {
   const lines = log.split('\n').filter(Boolean);
   const message = lines[1] ?? '';
   const refLine = lines[2] ?? '';
-  const branch = refLine.split(',')[0].replace(/^HEAD -> /, '').trim() || null;
+  const branch =
+    refLine
+      .split(',')[0]
+      .replace(/^HEAD -> /, '')
+      .trim() || null;
 
   const statLines = stat.trim().split('\n');
   const summary = statLines[statLines.length - 1] ?? '';
-  const m = summary.match(/(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/);
+  const m = summary.match(
+    /(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/,
+  );
   await dbExec(
     `INSERT INTO git_commits (project_id, action_id, commit_hash, branch, message, diff_summary, files_changed, additions, deletions)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -195,7 +228,10 @@ export async function linkLatestCommitToAction(projectId: number | null, actionI
 // ---------- Read layer ----------
 
 export async function getProjectHistory(limit = 50) {
-  return dbRows(`SELECT id, name, root_path, language, created_at, updated_at FROM projects ORDER BY updated_at DESC LIMIT $1`, [limit]);
+  return dbRows(
+    `SELECT id, name, root_path, language, created_at, updated_at FROM projects ORDER BY updated_at DESC LIMIT $1`,
+    [limit],
+  );
 }
 
 export async function getFileHistory(projectId: number, limit = 100) {

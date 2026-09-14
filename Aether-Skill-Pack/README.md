@@ -1,6 +1,6 @@
 # Aether Skill Pack — Organized Index (75 skills)
 
-Machine-readable index: `skills-manifest.json`. Load skills programmatically with `src/utils/skillsLoader.ts` (filter by category or pick ids; concatenates full markdown into task context).
+Machine-readable index: `skills-manifest.json` — filter by category or pick ids; consumers concatenate the full markdown into task context.
 
 Two formats live here: `agent-extra-skills/NN-*.md` (Trigger / What it does / Process / Output format / Guardrails) and `skills/<name>/SKILL.md` (frontmatter + guidance bullets). Agent role docs (`agents/`) and the constitution (`AETHER.md`) are not skills and are excluded.
 

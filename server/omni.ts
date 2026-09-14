@@ -1,3 +1,8 @@
+/**
+ * OmniClient — HTTP client for the OpenAI-compatible model gateway
+ * (OmniRoute). Handles model discovery, chat completion streaming, and API
+ * key resolution/masking. Security-sensitive: never logs full keys.
+ */
 import type { ModelInfo, OmniSettings } from '../shared/types.js';
 import { enrichModel, getSelectableModels } from './modelCatalog.js';
 
@@ -38,9 +43,14 @@ export class OmniClient {
     this.settings = settings;
     // Periodic catalog refresh (every 10 min) keeps free-model discovery
     // current without manual action.
-    this.refreshTimer = setInterval(() => {
-      void this.listModels().catch(() => { /* unreachable; cache retains last known */ });
-    }, 10 * 60 * 1000);
+    this.refreshTimer = setInterval(
+      () => {
+        void this.listModels().catch(() => {
+          /* unreachable; cache retains last known */
+        });
+      },
+      10 * 60 * 1000,
+    );
     this.refreshTimer.unref?.();
   }
 
@@ -49,9 +59,15 @@ export class OmniClient {
     return this.settings.apiKey || resolveApiKey();
   }
 
-  private get baseUrl() { return this.settings.baseUrl; }
-  private get timeoutMs() { return this.settings.timeoutMs; }
-  private get streaming() { return this.settings.streaming; }
+  private get baseUrl() {
+    return this.settings.baseUrl;
+  }
+  private get timeoutMs() {
+    return this.settings.timeoutMs;
+  }
+  private get streaming() {
+    return this.settings.streaming;
+  }
 
   url(p: string): string {
     return `${this.baseUrl.replace(/\/$/, '')}/${p.replace(/^\//, '')}`;
@@ -71,14 +87,20 @@ export class OmniClient {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), this.timeoutMs);
     try {
-      const res = await fetch(this.url('/models'), { headers: this.headers(), signal: ctrl.signal });
-      if (!res.ok) throw new Error(`Model endpoint /models failed: ${res.status} ${res.statusText}`);
+      const res = await fetch(this.url('/models'), {
+        headers: this.headers(),
+        signal: ctrl.signal,
+      });
+      if (!res.ok)
+        throw new Error(`Model endpoint /models failed: ${res.status} ${res.statusText}`);
       const data = (await res.json()) as { data?: ModelInfo[] } | ModelInfo[];
-      const src = Array.isArray(data) ? data : data.data ?? [];
-      const models = src.map((m) => enrichModel({
-        ...m,
-        contextWindow: (m as ModelInfo).contextWindow ?? guessContext(m.id),
-      }));
+      const src = Array.isArray(data) ? data : (data.data ?? []);
+      const models = src.map((m) =>
+        enrichModel({
+          ...m,
+          contextWindow: (m as ModelInfo).contextWindow ?? guessContext(m.id),
+        }),
+      );
       // Only overwrite the cached catalog when the fetch is nonempty — a
       // transient empty response should never wipe known-good state.
       if (models.length) {
@@ -103,9 +125,21 @@ export class OmniClient {
     handlers: {
       onDelta: (text: string) => void;
       onToolCall?: (tc: { id: string; name: string; arguments: string }) => void;
-      onUsage?: (u: { model: string; inputTokens: number; outputTokens: number; cachedInput?: number } | null) => void;
+      onUsage?: (
+        u: {
+          model: string;
+          inputTokens: number;
+          outputTokens: number;
+          cachedInput?: number;
+        } | null,
+      ) => void;
     },
-  ): Promise<{ text: string; toolCalls: { id: string; name: string; arguments: string }[]; finish: string | null; resolvedModel: string | null }> {
+  ): Promise<{
+    text: string;
+    toolCalls: { id: string; name: string; arguments: string }[];
+    finish: string | null;
+    resolvedModel: string | null;
+  }> {
     let text = '';
     const toolCalls: { id: string; name: string; arguments: string }[] = [];
     let finish: string | null = null;
@@ -131,7 +165,9 @@ export class OmniClient {
       });
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
-        throw new Error(`Chat request failed: ${res.status} ${res.statusText} ${errText.slice(0, 300)}`);
+        throw new Error(
+          `Chat request failed: ${res.status} ${res.statusText} ${errText.slice(0, 300)}`,
+        );
       }
       const contentType = res.headers.get('content-type') ?? '';
       const replyIsSse = contentType.includes('text/event-stream');
@@ -143,9 +179,19 @@ export class OmniClient {
         if (text) handlers.onDelta(text);
         for (const tc of msg.tool_calls ?? []) {
           toolCalls.push({ id: tc.id, name: tc.function.name, arguments: tc.function.arguments });
-          handlers.onToolCall?.({ id: tc.id, name: tc.function.name, arguments: tc.function.arguments });
+          handlers.onToolCall?.({
+            id: tc.id,
+            name: tc.function.name,
+            arguments: tc.function.arguments,
+          });
         }
-        if (data.usage) handlers.onUsage?.({ model: (data.model as string) ?? body.model, inputTokens: data.usage.prompt_tokens, outputTokens: data.usage.completion_tokens, cachedInput: data.usage.prompt_tokens_details?.cached_tokens ?? 0 });
+        if (data.usage)
+          handlers.onUsage?.({
+            model: (data.model as string) ?? body.model,
+            inputTokens: data.usage.prompt_tokens,
+            outputTokens: data.usage.completion_tokens,
+            cachedInput: data.usage.prompt_tokens_details?.cached_tokens ?? 0,
+          });
         finish = data.choices?.[0]?.finish_reason ?? 'stop';
         return;
       }
@@ -168,7 +214,13 @@ export class OmniClient {
             const json = JSON.parse(payload);
             if (typeof json.model === 'string' && json.model) resolvedModel = json.model;
             const delta = json.choices?.[0]?.delta;
-            if (json.usage) handlers.onUsage?.({ model: (json.model as string) ?? body.model, inputTokens: json.usage.prompt_tokens, outputTokens: json.usage.completion_tokens, cachedInput: json.usage.prompt_tokens_details?.cached_tokens ?? 0 });
+            if (json.usage)
+              handlers.onUsage?.({
+                model: (json.model as string) ?? body.model,
+                inputTokens: json.usage.prompt_tokens,
+                outputTokens: json.usage.completion_tokens,
+                cachedInput: json.usage.prompt_tokens_details?.cached_tokens ?? 0,
+              });
             if (delta?.content) {
               text += delta.content;
               handlers.onDelta(delta.content);
@@ -188,7 +240,9 @@ export class OmniClient {
               for (const tc of partial.values()) toolCalls.push(tc);
               break;
             }
-          } catch { /* skip malformed SSE frames */ }
+          } catch {
+            /* skip malformed SSE frames */
+          }
         }
         if (finish) break;
       }
@@ -201,7 +255,12 @@ export class OmniClient {
       // already reached it; retrying usually just repeats the failure.
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('AbortError') || msg.includes('50') || msg.includes('timeout') || msg.includes('Failed to fetch')) {
+      if (
+        msg.includes('AbortError') ||
+        msg.includes('50') ||
+        msg.includes('timeout') ||
+        msg.includes('Failed to fetch')
+      ) {
         try {
           await doCall(body.signal);
         } catch (e2) {

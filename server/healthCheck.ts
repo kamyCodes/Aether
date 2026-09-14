@@ -1,4 +1,8 @@
 import fs from 'node:fs';
+/**
+ * HealthMonitor — periodic reachability/liveness checks for the model
+ * gateway; surfaces degraded status to the UI status bar.
+ */
 import path from 'node:path';
 import os from 'node:os';
 import type { OmniSettings } from '../shared/types.js';
@@ -51,7 +55,10 @@ export class HealthMonitor {
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
 
-  constructor(private omni: OmniClient, private getSettings: () => OmniSettings) {
+  constructor(
+    private omni: OmniClient,
+    private getSettings: () => OmniSettings,
+  ) {
     this.load();
   }
 
@@ -59,21 +66,26 @@ export class HealthMonitor {
     try {
       const parsed = JSON.parse(fs.readFileSync(FILE, 'utf8')) as HealthFile;
       if (parsed && typeof parsed === 'object' && parsed.models) this.state = parsed;
-    } catch { /* first run or unreadable — fresh state */ }
+    } catch {
+      /* first run or unreadable — fresh state */
+    }
   }
 
   private save() {
     try {
       fs.mkdirSync(path.dirname(FILE), { recursive: true });
       fs.writeFileSync(FILE, JSON.stringify(this.state, null, 2));
-    } catch { /* best-effort persistence */ }
+    } catch {
+      /* best-effort persistence */
+    }
   }
 
   start() {
     if (this.timer) return;
-    const interval = Number(process.env.AETHER_HEALTH_INTERVAL_MS) > 0
-      ? Number(process.env.AETHER_HEALTH_INTERVAL_MS)
-      : CHECK_INTERVAL_MS;
+    const interval =
+      Number(process.env.AETHER_HEALTH_INTERVAL_MS) > 0
+        ? Number(process.env.AETHER_HEALTH_INTERVAL_MS)
+        : CHECK_INTERVAL_MS;
     // Startup probe after a grace period (let the server finish booting).
     setTimeout(() => void this.probeAll(), 5_000).unref?.();
     this.timer = setInterval(() => void this.probeAll(), interval);
@@ -81,13 +93,20 @@ export class HealthMonitor {
   }
 
   stop() {
-    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
   }
 
-  snapshot(): HealthFile { return this.state; }
+  snapshot(): HealthFile {
+    return this.state;
+  }
 
   healthFor(model: string): ModelHealth {
-    return this.state.models[model] ?? { status: 'unknown', lastChecked: 0, consecutiveFailures: 0 };
+    return (
+      this.state.models[model] ?? { status: 'unknown', lastChecked: 0, consecutiveFailures: 0 }
+    );
   }
 
   /** True when the model is in its post-failure cooldown window. */
@@ -109,7 +128,8 @@ export class HealthMonitor {
       h.consecutiveFailures += 1;
       h.status = h.consecutiveFailures >= FAILURES_BEFORE_COOLDOWN ? 'failing' : 'unknown';
       if (note) h.lastError = note.slice(0, 200);
-      if (h.consecutiveFailures >= FAILURES_BEFORE_COOLDOWN) h.cooldownUntil = Date.now() + COOLDOWN_MS;
+      if (h.consecutiveFailures >= FAILURES_BEFORE_COOLDOWN)
+        h.cooldownUntil = Date.now() + COOLDOWN_MS;
     }
     this.state.models[model] = h;
     this.state.updatedAt = Date.now();
@@ -145,9 +165,15 @@ export class HealthMonitor {
       // Some gateways return 200 with an in-body error object.
       if (ok) {
         try {
-          const body = await res.json() as { error?: unknown; choices?: unknown[] };
-          if (body.error || !body.choices?.length) { ok = false; note = 'probe: empty/error body'; }
-        } catch { ok = false; note = 'probe: unparseable body'; }
+          const body = (await res.json()) as { error?: unknown; choices?: unknown[] };
+          if (body.error || !body.choices?.length) {
+            ok = false;
+            note = 'probe: empty/error body';
+          }
+        } catch {
+          ok = false;
+          note = 'probe: unparseable body';
+        }
       }
     } catch (err) {
       ok = false;
@@ -165,7 +191,8 @@ export class HealthMonitor {
       h.consecutiveFailures += 1;
       h.status = 'failing';
       if (note) h.lastError = note;
-      if (h.consecutiveFailures >= FAILURES_BEFORE_COOLDOWN) h.cooldownUntil = Date.now() + COOLDOWN_MS;
+      if (h.consecutiveFailures >= FAILURES_BEFORE_COOLDOWN)
+        h.cooldownUntil = Date.now() + COOLDOWN_MS;
     }
     this.state.models[model] = h;
     this.state.updatedAt = Date.now();

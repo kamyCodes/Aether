@@ -1,4 +1,8 @@
 import fsp from 'node:fs/promises';
+/**
+ * ProjectIndexer — codebase search index (MiniSearch) for the search panel
+ * and agent context gathering. Rebuilds incrementally on FS change events.
+ */
 import path from 'node:path';
 import MiniSearch from 'minisearch';
 import type { WorkspaceManager } from './workspace.js';
@@ -32,12 +36,27 @@ const SYM_RE: { re: RegExp; kind: IndexedSymbol['kind'] }[] = [
   { re: /func\s+([A-Za-z0-9_]+)/g, kind: 'function' },
 ];
 
-const IMPORT_RE = /(?:import\s+.*?\s+from\s+['"]([^'"]+)['"]|import\s+['"]([^'"]+)['"]|from\s+([.\w]+)\s+import|require\(\s*['"]([^'"]+)['"]\s*\))/g;
+const IMPORT_RE =
+  /(?:import\s+.*?\s+from\s+['"]([^'"]+)['"]|import\s+['"]([^'"]+)['"]|from\s+([.\w]+)\s+import|require\(\s*['"]([^'"]+)['"]\s*\))/g;
 
 const LANG_BY_EXT: Record<string, string> = {
-  '.ts': 'typescript', '.tsx': 'typescriptreact', '.js': 'javascript', '.jsx': 'javascriptreact',
-  '.py': 'python', '.go': 'go', '.rs': 'rust', '.java': 'java', '.rb': 'ruby', '.md': 'markdown',
-  '.json': 'json', '.css': 'css', '.html': 'html', '.sql': 'sql', '.sh': 'shell', '.yml': 'yaml', '.yaml': 'yaml',
+  '.ts': 'typescript',
+  '.tsx': 'typescriptreact',
+  '.js': 'javascript',
+  '.jsx': 'javascriptreact',
+  '.py': 'python',
+  '.go': 'go',
+  '.rs': 'rust',
+  '.java': 'java',
+  '.rb': 'ruby',
+  '.md': 'markdown',
+  '.json': 'json',
+  '.css': 'css',
+  '.html': 'html',
+  '.sql': 'sql',
+  '.sh': 'shell',
+  '.yml': 'yaml',
+  '.yaml': 'yaml',
 };
 
 export function langForFile(p: string): string {
@@ -77,15 +96,26 @@ export class ProjectIndexer {
         const symbols = extractSymbols(content, rel);
         const imports = extractImports(content);
         const prev = this.files.get(rel);
-        const entry: IndexedFile = { path: rel, tokens: countTokens(content), lang: langForFile(rel), symbols, imports };
+        const entry: IndexedFile = {
+          path: rel,
+          tokens: countTokens(content),
+          lang: langForFile(rel),
+          symbols,
+          imports,
+        };
         this.files.set(rel, entry);
         // MiniSearch keys documents by a unique `id` field — without it every
         // document collides on `undefined` and search silently returns nothing.
         // Discard by ID (not by document object) before re-adding on refresh.
         if (prev) this.search.discard(rel);
-        this.search.add({ id: rel, ...entry, content } as IndexedFile & { id: string; content: string });
+        this.search.add({ id: rel, ...entry, content } as IndexedFile & {
+          id: string;
+          content: string;
+        });
         count++;
-      } catch { /* unreadable */ }
+      } catch {
+        /* unreadable */
+      }
     }
     this.fileCount = this.files.size;
     this.ready = true;
@@ -121,7 +151,8 @@ export class ProjectIndexer {
     for (const [p, content] of this.contentCache) {
       const lines = content.split('\n');
       for (let i = 0; i < lines.length && out.length < limit; i++) {
-        if (lines[i].includes(symbol)) out.push({ path: p, line: i + 1, text: lines[i].trim().slice(0, 200) });
+        if (lines[i].includes(symbol))
+          out.push({ path: p, line: i + 1, text: lines[i].trim().slice(0, 200) });
       }
     }
     return out;
@@ -137,7 +168,9 @@ export class ProjectIndexer {
     const lines: string[] = [`Codebase map (${this.files.size} indexed files):`];
     let n = 0;
     for (const [dir, files] of dirs) {
-      lines.push(`${dir}/: ${files.slice(0, 12).join(', ')}${files.length > 12 ? ` +${files.length - 12} more` : ''}`);
+      lines.push(
+        `${dir}/: ${files.slice(0, 12).join(', ')}${files.length > 12 ? ` +${files.length - 12} more` : ''}`,
+      );
       if (++n >= maxFiles) break;
     }
     return lines.join('\n');
@@ -171,7 +204,10 @@ export class ProjectIndexer {
       if (q.length > 8 && occurrences > 0) score += Math.min(6, occurrences);
       if (score > 0) scored.set(p, score);
     }
-    return [...scored.entries()].sort((a, b) => b[1] - a[1]).slice(0, cap).map(([p]) => p);
+    return [...scored.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, cap)
+      .map(([p]) => p);
   }
 
   getTokensFor(rel: string): number {
@@ -179,7 +215,11 @@ export class ProjectIndexer {
   }
 
   stats() {
-    return { files: this.files.size, ready: this.ready, symbols: [...this.files.values()].reduce((a, f) => a + f.symbols.length, 0) };
+    return {
+      files: this.files.size,
+      ready: this.ready,
+      symbols: [...this.files.values()].reduce((a, f) => a + f.symbols.length, 0),
+    };
   }
 }
 

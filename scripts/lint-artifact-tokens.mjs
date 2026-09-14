@@ -50,17 +50,25 @@ function main() {
     const line = lines[i];
     const trimmed = line.trim();
 
-    if (TOKEN_DEF_BLOCK.test(trimmed)) { inRoot = true; }
-    if (inRoot && trimmed === '}') { inRoot = false; continue; }
+    if (TOKEN_DEF_BLOCK.test(trimmed)) {
+      inRoot = true;
+    }
+    if (inRoot && trimmed === '}') {
+      inRoot = false;
+      continue;
+    }
     if (inRoot) continue; // token definitions themselves are exempt
 
     // Track the current rule's selector (last line ending in `{` at depth 0).
     for (const ch of line) {
-      if (ch === '{') { depth++; if (depth === 1) currentSelector = line.replace(/\{.*$/, '').trim(); }
+      if (ch === '{') {
+        depth++;
+        if (depth === 1) currentSelector = line.replace(/\{.*$/, '').trim();
+      }
       if (ch === '}') depth--;
     }
 
-    if (depth !== 1) continue;               // only declarations inside rules
+    if (depth !== 1) continue; // only declarations inside rules
     if (!ARTIFACT_SELECTOR.test(currentSelector)) continue; // only artifact rules
     if (trimmed.startsWith('/*') || trimmed.startsWith('*')) continue;
     // Waiver escape hatch: a trailing /* token-waiver: <reason> */ on the
@@ -83,12 +91,18 @@ function main() {
   }
 
   if (violations.length) {
-    console.error(`\n✗ token-discipline: ${violations.length} hardcoded px value(s) in artifact CSS\n`);
+    console.error(
+      `\n✗ token-discipline: ${violations.length} hardcoded px value(s) in artifact CSS\n`,
+    );
     for (const v of violations) {
-      console.error(`  ${CSS_PATH}:${v.line}  ${v.selector} :: ${v.prop}: ${v.value}   (offending: ${v.bad})`);
+      console.error(
+        `  ${CSS_PATH}:${v.line}  ${v.selector} :: ${v.prop}: ${v.value}   (offending: ${v.bad})`,
+      );
     }
     console.error('\nUse --radius-card / --radius-input / --radius-badge / --space-* instead.');
-    console.error('Odd composites that genuinely need raw px need a line waiver: /* token-waiver: reason */');
+    console.error(
+      'Odd composites that genuinely need raw px need a line waiver: /* token-waiver: reason */',
+    );
     process.exit(1);
   }
   console.log('✓ token-discipline: artifact CSS clean — all radii/spacings use tokens or waivers');

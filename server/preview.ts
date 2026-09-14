@@ -1,4 +1,8 @@
 import http from 'node:http';
+/**
+ * PreviewManager — runs the workspace's dev server and proxies it under the
+ * server's own port so the Preview panel works without extra ports.
+ */
 import fs from 'node:fs';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
@@ -30,16 +34,34 @@ export class PreviewManager extends EventEmitter {
         return;
       }
       let p = path.join(workspaceRoot, decodeURIComponent(url.pathname));
-      if (!p.startsWith(workspaceRoot)) { res.writeHead(403); res.end(); return; }
+      if (!p.startsWith(workspaceRoot)) {
+        res.writeHead(403);
+        res.end();
+        return;
+      }
       if (fs.existsSync(p) && fs.statSync(p).isDirectory()) p = path.join(p, 'index.html');
       if (!fs.existsSync(p)) {
         // SPA fallback: serve index.html if present
         const idx = path.join(workspaceRoot, 'index.html');
         if (fs.existsSync(idx)) p = idx;
-        else { res.writeHead(404); res.end('Not found'); return; }
+        else {
+          res.writeHead(404);
+          res.end('Not found');
+          return;
+        }
       }
       const ext = path.extname(p);
-      const types: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.ico': 'image/x-icon' };
+      const types: Record<string, string> = {
+        '.html': 'text/html',
+        '.js': 'text/javascript',
+        '.css': 'text/css',
+        '.json': 'application/json',
+        '.svg': 'image/svg+xml',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.ico': 'image/x-icon',
+      };
       res.writeHead(200, { 'Content-Type': types[ext] ?? 'application/octet-stream' });
       let content: Buffer = fs.readFileSync(p);
       if (ext === '.html') content = Buffer.concat([content, Buffer.from(LIVE_RELOAD_SNIPPET)]);

@@ -1,2 +1,0 @@
-# Demo
-Sample **markdown** file.

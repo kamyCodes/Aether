@@ -1,4 +1,9 @@
 import fs from 'node:fs';
+/**
+ * PermissionManager — security gate for agent tool use. Decides allow/deny
+ * per tool call from user rules and autonomy settings; anything unmatched
+ * becomes a pending request the user must answer in the UI.
+ */
 import path from 'node:path';
 import os from 'node:os';
 import picomatch from 'picomatch';
@@ -86,7 +91,11 @@ export class PermissionManager {
   private matchSaved(kind: PermissionRequest['kind'], target: string): 'allow' | 'deny' | null {
     for (const r of this.rules) {
       if (r.kind !== kind) continue;
-      if (r.pattern === '*' || picomatch.isMatch(target, r.pattern) || target.startsWith(r.pattern)) {
+      if (
+        r.pattern === '*' ||
+        picomatch.isMatch(target, r.pattern) ||
+        target.startsWith(r.pattern)
+      ) {
         return r.decision;
       }
     }
@@ -123,12 +132,15 @@ export class PermissionManager {
     const decision = await new Promise<'allow' | 'always' | 'deny'>((resolve) => {
       this.pending.set(id, resolve);
       // auto-deny after 5 minutes of silence
-      setTimeout(() => {
-        if (this.pending.has(id)) {
-          this.pending.delete(id);
-          resolve('deny');
-        }
-      }, 5 * 60 * 1000).unref();
+      setTimeout(
+        () => {
+          if (this.pending.has(id)) {
+            this.pending.delete(id);
+            resolve('deny');
+          }
+        },
+        5 * 60 * 1000,
+      ).unref();
     });
 
     if (decision === 'always') {
