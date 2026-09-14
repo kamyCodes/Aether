@@ -1,0 +1,1083 @@
+{
+  "categories": {
+    "ui": {
+      "label": "UI",
+      "skills": [
+        "11-design-token-enforcer",
+        "12-motion-interaction-reviewer",
+        "16-empty-state-generator",
+        "17-latency-aware-skeleton-builder",
+        "19-multi-theme-consistency-checker",
+        "frontend-engineering",
+        "ui-design"
+      ]
+    },
+    "design": {
+      "label": "Design",
+      "skills": [
+        "18-design-to-code-diff-checker",
+        "22-apple-hig-design"
+      ]
+    },
+    "verification": {
+      "label": "Verification",
+      "skills": [
+        "08-xml-document-structure-validator",
+        "13-accessibility-auditor",
+        "14-component-api-critic",
+        "25-i18n-localization-completeness-checker",
+        "26-dead-code-unused-export-finder",
+        "33-error-logging-consistency-enforcer",
+        "42-continuous-quality-gate",
+        "43-autonomous-adversarial-reviewer",
+        "accessibility",
+        "code-review",
+        "quality-gates",
+        "security"
+      ]
+    },
+    "testing": {
+      "label": "Testing",
+      "skills": [
+        "04-test-gap-finder",
+        "05-prompt-response-regression-harness",
+        "10-performance-regression-sentinel",
+        "15-visual-regression-diffing-agent",
+        "28-flaky-test-detector",
+        "testing"
+      ]
+    },
+    "build": {
+      "label": "Build",
+      "skills": [
+        "01-contract-first-api-scaffolder",
+        "03-migration-safe-schema-editor",
+        "21-code-complexity-reducer",
+        "35-full-app-from-prompt-builder",
+        "36-self-healing-build-loop",
+        "44-prototype-to-production-hardener",
+        "api-engineering",
+        "core-engineering",
+        "database",
+        "implementation",
+        "migrations",
+        "refactoring"
+      ]
+    },
+    "debugging": {
+      "label": "Debugging",
+      "skills": [
+        "02-dependency-graph-impact-analyzer",
+        "20-narrative-state-debugger",
+        "38-autonomous-root-cause-debugger",
+        "change-impact-analysis",
+        "debugging",
+        "incident-recovery",
+        "performance"
+      ]
+    },
+    "ops": {
+      "label": "Ops",
+      "skills": [
+        "06-env-secrets-drift-checker",
+        "07-doc-sync",
+        "24-secrets-credential-leak-scanner",
+        "27-bundle-size-auditor",
+        "29-feature-flag-lifecycle-manager",
+        "30-changelog-release-notes-generator",
+        "31-api-rate-limit-backoff-auditor",
+        "32-config-parity-checker",
+        "34-commit-message-quality-skill",
+        "dependency-management",
+        "documentation",
+        "git-workflow",
+        "observability",
+        "release-engineering",
+        "terminal-safety"
+      ]
+    },
+    "orchestration": {
+      "label": "Orchestration",
+      "skills": [
+        "23-fast-task-completion-mode",
+        "37-multi-agent-task-orchestrator",
+        "39-live-architecture-decision-recorder",
+        "40-spec-to-build-plan-converter",
+        "agent-coordination",
+        "architecture",
+        "autonomous-task-execution",
+        "planning",
+        "task-memory"
+      ]
+    },
+    "import": {
+      "label": "Import",
+      "skills": [
+        "09-cross-repo-context-linker",
+        "41-multimodal-spec-binder",
+        "repo-exploration",
+        "research"
+      ]
+    },
+    "output-style": {
+      "label": "Output Style",
+      "skills": [
+        "45-caveman-compressed-mode"
+      ]
+    }
+  },
+  "skills": {
+    "01-contract-first-api-scaffolder": {
+      "name": "Contract-First API Scaffolder",
+      "file": "agent-extra-skills/01-contract-first-api-scaffolder.md",
+      "category": "build",
+      "trigger": "User provides an OpenAPI spec, GraphQL schema, or a plain-language description of an API endpoint/resource. User says things like \"scaffold this endpoint\", \"generate the API for…",
+      "summary": "Generates backend route handlers + validation models AND the matching frontend client types/hooks in a single pass, so the two never drift out of sync.",
+      "tags": [
+        "api",
+        "scaffolding",
+        "codegen",
+        "contracts"
+      ]
+    },
+    "02-dependency-graph-impact-analyzer": {
+      "name": "Dependency-Graph Impact Analyzer",
+      "file": "agent-extra-skills/02-dependency-graph-impact-analyzer.md",
+      "category": "debugging",
+      "trigger": "Before any non-trivial refactor, rename, or signature change. User says \"what will this break\", \"what depends on this\", \"impact of changing X\".",
+      "summary": "Statically traces every module, route, test, and caller that touches the function/class being changed, and produces a blast-radius report before any edit is made.",
+      "tags": [
+        "impact-analysis",
+        "refactoring",
+        "dependencies",
+        "risk"
+      ]
+    },
+    "03-migration-safe-schema-editor": {
+      "name": "Migration-Safe Schema Editor",
+      "file": "agent-extra-skills/03-migration-safe-schema-editor.md",
+      "category": "build",
+      "trigger": "Any change to an ORM model, SQL table definition, or database schema. User says \"add a column\", \"change this model\", \"update the schema\".",
+      "summary": "Diffs the proposed model change against the current schema and generates the matching migration file (Alembic/Prisma/Django/etc., detect from repo) plus a working rollback.",
+      "tags": [
+        "migrations",
+        "database",
+        "schema",
+        "orm"
+      ]
+    },
+    "04-test-gap-finder": {
+      "name": "Test Gap Finder",
+      "file": "agent-extra-skills/04-test-gap-finder.md",
+      "category": "testing",
+      "trigger": "User says \"find missing tests\", \"improve coverage\", \"what's untested here\". After adding new logic with conditional branches.",
+      "summary": "Runs (or reads) coverage data and generates tests specifically for uncovered branches — not a blanket regeneration of the whole test suite.",
+      "tags": [
+        "coverage",
+        "test-generation",
+        "gaps"
+      ]
+    },
+    "05-prompt-response-regression-harness": {
+      "name": "Prompt/Response Regression Harness",
+      "file": "agent-extra-skills/05-prompt-response-regression-harness.md",
+      "category": "testing",
+      "trigger": "Any change to a prompt template, model version, or NLP/ML pipeline step. User says \"did this prompt change break anything\", \"compare model outputs\".",
+      "summary": "Snapshots prompts and their outputs, then flags when the same input starts producing a meaningfully different output after a change.",
+      "tags": [
+        "regression",
+        "llm",
+        "prompts",
+        "harness"
+      ]
+    },
+    "06-env-secrets-drift-checker": {
+      "name": "Env/Secrets Drift Checker",
+      "file": "agent-extra-skills/06-env-secrets-drift-checker.md",
+      "category": "ops",
+      "trigger": "Before a deploy. User says \"check my env vars\", \"why is this failing in prod\", \"deploy readiness check\".",
+      "summary": "Diffs `.env.example` (or equivalent) against what the code actually reads (`os.getenv`, `process.env`, config classes) and against deployment platform env vars if accessible, flagging missing or unused keys before runtime failure.",
+      "tags": [
+        "env",
+        "deploy",
+        "secrets",
+        "config"
+      ]
+    },
+    "07-doc-sync": {
+      "name": "Doc-Sync Skill",
+      "file": "agent-extra-skills/07-doc-sync.md",
+      "category": "ops",
+      "trigger": "Any change to a function/method signature, public API, or exported type. User says \"update the docs\", \"keep docs in sync\".",
+      "summary": "Detects signature/behavior changes and updates the corresponding README section, docstring, and API reference in the same change, so docs don't silently rot.",
+      "tags": [
+        "documentation",
+        "api-docs",
+        "sync"
+      ]
+    },
+    "08-xml-document-structure-validator": {
+      "name": "XML/Document-Structure Validator",
+      "file": "agent-extra-skills/08-xml-document-structure-validator.md",
+      "category": "verification",
+      "trigger": "Working with XML, DOCX-internal XML, XSD-bound documents, or any schema-validated document format. User says \"validate this XML\", \"why is this document invalid\", \"check against …",
+      "summary": "Validates a document against its schema (XSD/DTD/RelaxNG) and translates raw parser errors into plain-language explanations with a suggested fix.",
+      "tags": [
+        "xml",
+        "validation",
+        "documents",
+        "xsd"
+      ]
+    },
+    "09-cross-repo-context-linker": {
+      "name": "Cross-Repo Context Linker",
+      "file": "agent-extra-skills/09-cross-repo-context-linker.md",
+      "category": "import",
+      "trigger": "Multi-service or multi-repo projects where a change in one repo affects another (e.g., a shared architecture like IRIS with separate modules). User says \"check how this is used …",
+      "summary": "Pulls relevant context (interfaces, shared types, config contracts) from sibling repos/modules without the user manually pasting files in.",
+      "tags": [
+        "cross-repo",
+        "context",
+        "multi-service",
+        "linking"
+      ]
+    },
+    "10-performance-regression-sentinel": {
+      "name": "Performance Regression Sentinel",
+      "file": "agent-extra-skills/10-performance-regression-sentinel.md",
+      "category": "testing",
+      "trigger": "Changes to hot paths: inference calls, tight loops, DB queries, anything previously identified as performance-sensitive. User says \"check for perf regressions\", \"benchmark this …",
+      "summary": "Benchmarks the affected code path before and after a change and flags if latency/memory crosses a set threshold — especially useful around ML/NLP inference calls.",
+      "tags": [
+        "performance",
+        "regression",
+        "benchmark",
+        "hot-paths"
+      ]
+    },
+    "11-design-token-enforcer": {
+      "name": "Design-Token Enforcer",
+      "file": "agent-extra-skills/11-design-token-enforcer.md",
+      "category": "ui",
+      "trigger": "Any new or modified UI component. User says \"check this against our design tokens\", \"fix hardcoded styles\".",
+      "summary": "Scans components for hardcoded colors, spacing, and font values and rewrites them against the project's existing design tokens/theme variables.",
+      "tags": [
+        "design-tokens",
+        "theming",
+        "styling",
+        "consistency"
+      ]
+    },
+    "12-motion-interaction-reviewer": {
+      "name": "Motion/Interaction Reviewer",
+      "file": "agent-extra-skills/12-motion-interaction-reviewer.md",
+      "category": "ui",
+      "trigger": "New or changed interactive component (buttons, cards, modals, nav items). User says \"review the interactions\", \"check states/animations\".",
+      "summary": "Flags missing hover/focus/active/disabled states and inconsistent transition timing, and proposes a concrete motion spec instead of just noting what's missing.",
+      "tags": [
+        "interaction-states",
+        "motion",
+        "transitions",
+        "polish"
+      ]
+    },
+    "13-accessibility-auditor": {
+      "name": "Accessibility Auditor (with fix-patches)",
+      "file": "agent-extra-skills/13-accessibility-auditor.md",
+      "category": "verification",
+      "trigger": "Any UI component work. User says \"check accessibility\", \"a11y audit\", \"is this compliant\".",
+      "summary": "Runs axe-core-style checks conceptually against the rendered/markup output and generates an actual patch (aria labels, contrast fixes, focus order) instead of just a report.",
+      "tags": [
+        "accessibility",
+        "a11y",
+        "aria",
+        "contrast",
+        "ui"
+      ]
+    },
+    "14-component-api-critic": {
+      "name": "Component API Critic",
+      "file": "agent-extra-skills/14-component-api-critic.md",
+      "category": "verification",
+      "trigger": "New component being added to a shared component library. User says \"review this component's props/API\", \"is this consistent with our other components\".",
+      "summary": "Reviews new component props against the conventions already established elsewhere in the library (naming, boolean vs.",
+      "tags": [
+        "components",
+        "api-design",
+        "conventions",
+        "review",
+        "ui"
+      ]
+    },
+    "15-visual-regression-diffing-agent": {
+      "name": "Visual Regression Diffing Agent",
+      "file": "agent-extra-skills/15-visual-regression-diffing-agent.md",
+      "category": "testing",
+      "trigger": "Any change to component styling or layout. User says \"check for visual regressions\", \"did this change break the layout\".",
+      "summary": "Compares before/after rendered output of a component at multiple breakpoints and highlights actual pixel-level/layout differences, not just \"the code changed.\"",
+      "tags": [
+        "visual-regression",
+        "breakpoints",
+        "diffing"
+      ]
+    },
+    "16-empty-state-generator": {
+      "name": "Empty-State / Edge-State Generator",
+      "file": "agent-extra-skills/16-empty-state-generator.md",
+      "category": "ui",
+      "trigger": "Any list, table, dashboard, or data-driven component. User says \"handle the empty state\", \"what about loading/errors\".",
+      "summary": "Auto-generates the loading, empty, error, and overflow states for a data-driven component — the states usually forgotten until QA finds them.",
+      "tags": [
+        "edge-states",
+        "loading",
+        "error-states",
+        "components"
+      ]
+    },
+    "17-latency-aware-skeleton-builder": {
+      "name": "Latency-Aware UI Skeleton Builder",
+      "file": "agent-extra-skills/17-latency-aware-skeleton-builder.md",
+      "category": "ui",
+      "trigger": "Building a loading state for a component backed by a real API call. User says \"add a loading state\", \"this loading feels off\".",
+      "summary": "Generates skeleton/shimmer states si",
+      "tags": [
+        "skeletons",
+        "loading",
+        "latency",
+        "ux"
+      ]
+    },
+    "18-design-to-code-diff-checker": {
+      "name": "Design-to-Code Diff Checker",
+      "file": "agent-extra-skills/18-design-to-code-diff-checker.md",
+      "category": "design",
+      "trigger": "A Figma frame/link or design spec is provided alongside implemented code. User says \"does this match the design\", \"check against Figma\".",
+      "summary": "Compares the shipped component against the provided design reference (spacing, type scale, colors, si",
+      "tags": [
+        "design-to-code",
+        "fidelity",
+        "spec-matching",
+        "ui"
+      ]
+    },
+    "19-multi-theme-consistency-checker": {
+      "name": "Multi-Theme Consistency Checker",
+      "file": "agent-extra-skills/19-multi-theme-consistency-checker.md",
+      "category": "ui",
+      "trigger": "App supports dark/light/brand or other theme variants. User says \"check this in dark mode\", \"does this work across themes\".",
+      "summary": "Verifies a new or changed component renders correctly across every supported theme variant, not just the one it was built/tested in.",
+      "tags": [
+        "theming",
+        "variants",
+        "consistency"
+      ]
+    },
+    "20-narrative-state-debugger": {
+      "name": "Narrative-State Debugger for Agentic UIs",
+      "file": "agent-extra-skills/20-narrative-state-debugger.md",
+      "category": "debugging",
+      "trigger": "Multi-step AI/agent-driven interfaces (assistant UIs, conversational agents, multi-turn workflows like a JARVIS-style system or an analysis pipeline with a UI). User says \"the U…",
+      "summary": "Traces a session's UI state transitions against the underlying agent/session state and flags where they've desynced — a common bug class in AI-driven interfaces where the UI shows a stale step, wrong status, or mismatched output.",
+      "tags": [
+        "agentic-ui",
+        "state-desync",
+        "session-state",
+        "ui"
+      ]
+    },
+    "21-code-complexity-reducer": {
+      "name": "Code Complexity Reducer",
+      "file": "agent-extra-skills/21-code-complexity-reducer.md",
+      "category": "build",
+      "trigger": "User says \"simplify this\", \"reduce complexity\", \"this function is too complex\". Any function with deep nesting, long parameter lists, or high branching.",
+      "summary": "Scans for cyclomatic complexity, deep nesting, and long parameter lists, then proposes concrete refactors ranked by complexity-reduction-per-line-changed — not style nitpicks.",
+      "tags": [
+        "refactoring",
+        "complexity",
+        "nesting",
+        "debugging"
+      ]
+    },
+    "22-apple-hig-design": {
+      "name": "Apple HIG Design Skill",
+      "file": "agent-extra-skills/22-apple-hig-design.md",
+      "category": "design",
+      "trigger": "Building or reviewing UI intended for iOS/macOS or targeting an \"Apple-native\" feel. User says \"make this feel native\", \"Apple-style design\", \"check against HIG\".",
+      "summary": "Applies Apple's Human Interface Guidelines: correct spacing/type scale, native navigation and gesture patterns, proper use of materials/blur/depth, and platform-appropriate controls — flags anything that reads as non-native.",
+      "tags": [
+        "hig",
+        "apple",
+        "native-patterns",
+        "platform",
+        "ui"
+      ]
+    },
+    "23-fast-task-completion-mode": {
+      "name": "Fast Task Completion Mode",
+      "file": "agent-extra-skills/23-fast-task-completion-mode.md",
+      "category": "orchestration",
+      "trigger": "User explicitly requests speed: \"just do it\", \"fast mode\", \"don't overthink this\", or the task is clearly well-scoped and low-ambiguity.",
+      "summary": "A lean execution mode for well-scoped tasks: skips exploratory discussion, batches reads/edits instead of doing them one at a time, defaults to the most conventional implementation without presenting multiple options, and only pauses for ge",
+      "tags": [
+        "execution-mode",
+        "batching",
+        "efficiency"
+      ]
+    },
+    "24-secrets-credential-leak-scanner": {
+      "name": "Secrets/Credential Leak Scanner",
+      "file": "agent-extra-skills/24-secrets-credential-leak-scanner.md",
+      "category": "ops",
+      "trigger": "Before any git push/commit. User says \"check for leaked secrets\", \"scan for exposed keys\".",
+      "summary": "Scans working diffs AND git history (not just `.env` files) for hardcoded API keys, tokens, and credentials, matching known key-format patterns (AWS, Stripe, OpenAI, GitHub, JWTs, etc.) before a push.",
+      "tags": [
+        "secrets",
+        "security",
+        "git-history",
+        "leaks"
+      ]
+    },
+    "25-i18n-localization-completeness-checker": {
+      "name": "i18n/Localization Completeness Checker",
+      "file": "agent-extra-skills/25-i18n-localization-completeness-checker.md",
+      "category": "verification",
+      "trigger": "Adding or changing user-facing text in an app with translation files. User says \"check translations\", \"i18n audit\".",
+      "summary": "Diffs translation files against the base locale, flags missing keys, unused keys, and raw user-facing strings that were never wrapped in the translation function.",
+      "tags": [
+        "i18n",
+        "l10n",
+        "translations",
+        "completeness"
+      ]
+    },
+    "26-dead-code-unused-export-finder": {
+      "name": "Dead Code & Unused Export Finder",
+      "file": "agent-extra-skills/26-dead-code-unused-export-finder.md",
+      "category": "verification",
+      "trigger": "User says \"find dead code\", \"clean up unused exports\", periodic codebase hygiene pass.",
+      "summary": "Traces the full import graph across the codebase to find exported functions/components/routes that nothing references anymore — a whole-codebase audit, distinct from pre-change impact analysis.",
+      "tags": [
+        "dead-code",
+        "imports",
+        "audit",
+        "build"
+      ]
+    },
+    "27-bundle-size-auditor": {
+      "name": "Bundle Size Auditor",
+      "file": "agent-extra-skills/27-bundle-size-auditor.md",
+      "category": "ops",
+      "trigger": "Adding a new dependency, or user says \"check bundle si",
+      "summary": "Flags what a new dependency/import actually costs in bundle si",
+      "tags": [
+        "bundle-size",
+        "dependencies",
+        "tree-shaking",
+        "build"
+      ]
+    },
+    "28-flaky-test-detector": {
+      "name": "Flaky Test Detector",
+      "file": "agent-extra-skills/28-flaky-test-detector.md",
+      "category": "testing",
+      "trigger": "A test fails intermittently, or user says \"this test is flaky\", \"why does this fail randomly\".",
+      "summary": "Reruns the suite/test multiple times to isolate intermittent failures, then diagnoses the likely cause instead of just labeling it \"flaky\" and moving on.",
+      "tags": [
+        "flaky-tests",
+        "diagnosis",
+        "ci"
+      ]
+    },
+    "29-feature-flag-lifecycle-manager": {
+      "name": "Feature Flag Lifecycle Manager",
+      "file": "agent-extra-skills/29-feature-flag-lifecycle-manager.md",
+      "category": "ops",
+      "trigger": "Adding a new feature flag, or user says \"audit feature flags\", \"clean up flags\".",
+      "summary": "Tracks flags from creation to cleanup: flags ones at 100% rollout for a while that should be deleted, and warns when new code adds a permanent dependency on a supposedly-temporary flag.",
+      "tags": [
+        "feature-flags",
+        "rollout",
+        "cleanup"
+      ]
+    },
+    "30-changelog-release-notes-generator": {
+      "name": "Changelog/Release Notes Generator",
+      "file": "agent-extra-skills/30-changelog-release-notes-generator.md",
+      "category": "ops",
+      "trigger": "Preparing a release/tag, or user says \"generate changelog\", \"draft release notes\".",
+      "summary": "Reads merged commits/PRs since the last tag and drafts categori",
+      "tags": [
+        "changelog",
+        "release-notes",
+        "git-log"
+      ]
+    },
+    "31-api-rate-limit-backoff-auditor": {
+      "name": "API Rate-Limit & Backoff Auditor",
+      "file": "agent-extra-skills/31-api-rate-limit-backoff-auditor.md",
+      "category": "ops",
+      "trigger": "Adding a call to an external API, or user says \"check retry logic\", \"will this hit rate limits\".",
+      "summary": "Checks external API calls for missing retry/backoff logic, flags calls with no rate-limit handling, and generates an exponential-backoff wrapper matching the target API's documented limits.",
+      "tags": [
+        "rate-limits",
+        "backoff",
+        "retries",
+        "api"
+      ]
+    },
+    "32-config-parity-checker": {
+      "name": "Config Parity Across Environments Checker",
+      "file": "agent-extra-skills/32-config-parity-checker.md",
+      "category": "ops",
+      "trigger": "User says \"check config drift\", \"compare staging and prod config\", before a deploy.",
+      "summary": "Compares dev/staging/prod config (feature flags, timeouts, limits, resource si",
+      "tags": [
+        "config",
+        "environments",
+        "drift"
+      ]
+    },
+    "33-error-logging-consistency-enforcer": {
+      "name": "Error/Logging Consistency Enforcer",
+      "file": "agent-extra-skills/33-error-logging-consistency-enforcer.md",
+      "category": "verification",
+      "trigger": "Adding error handling/logging, or user says \"check logging consistency\", \"standardi",
+      "summary": "Checks that errors are logged with a consistent structure (level, context fields, stack trace inclusion) across the codebase, instead of every file inventing its own shape.",
+      "tags": [
+        "logging",
+        "errors",
+        "consistency",
+        "ops"
+      ]
+    },
+    "34-commit-message-quality-skill": {
+      "name": "Commit Message Quality Skill",
+      "file": "agent-extra-skills/34-commit-message-quality-skill.md",
+      "category": "ops",
+      "trigger": "Ready to commit staged changes, or user says \"write a commit message\", \"draft a commit\".",
+      "summary": "Reviews staged changes and drafts a commit message matching the repo's actual convention (conventional commits, ticket-prefix style, imperative one-liners, etc.), inferred from git log history — not a generic template.",
+      "tags": [
+        "git",
+        "commit-messages",
+        "conventions"
+      ]
+    },
+    "35-full-app-from-prompt-builder": {
+      "name": "Full-App-From-Prompt Builder",
+      "file": "agent-extra-skills/35-full-app-from-prompt-builder.md",
+      "category": "build",
+      "trigger": "User gives a plain product description and wants a working app, not just a single file/component. User says \"build me an app that...\", \"scaffold a full product for...\".",
+      "summary": "Takes a plain-language product description and scaffolds a complete, architecturally coherent app in one pass — frontend, backend, data model, auth — with a written rationale for each structural decision, not a pile of disconnected files.",
+      "tags": [
+        "scaffolding",
+        "full-app",
+        "codegen",
+        "architecture"
+      ]
+    },
+    "36-self-healing-build-loop": {
+      "name": "Self-Healing Build Loop",
+      "file": "agent-extra-skills/36-self-healing-build-loop.md",
+      "category": "build",
+      "trigger": "After generating or modifying code, before presenting it as finished. User says \"make sure this actually builds/passes\", \"fix it until it works\".",
+      "summary": "After every generated change, runs build/lint/test, parses the actual error output, and iterates fixes autonomously up to a capped attempt count — then reports plainly what it couldn't resolve, instead of claiming success it didn't verify.",
+      "tags": [
+        "build-loop",
+        "autonomous",
+        "error-parsing",
+        "testing"
+      ]
+    },
+    "37-multi-agent-task-orchestrator": {
+      "name": "Multi-Agent Task Orchestrator",
+      "file": "agent-extra-skills/37-multi-agent-task-orchestrator.md",
+      "category": "orchestration",
+      "trigger": "A task is large enough that one flat pass tends to lose coherence (a full feature, a multi-file refactor, a full app). User says \"break this down and handle it properly\", \"this …",
+      "summary": "Breaks a large task into explicit roles — planner, implementer, reviewer, tester — with defined handoff contracts between them, so a big task doesn't collapse under one undifferentiated context pass.",
+      "tags": [
+        "multi-agent",
+        "roles",
+        "handoffs"
+      ]
+    },
+    "38-autonomous-root-cause-debugger": {
+      "name": "Autonomous Root-Cause Debugger",
+      "file": "agent-extra-skills/38-autonomous-root-cause-debugger.md",
+      "category": "debugging",
+      "trigger": "Given a bug report, error message, or stack trace. User says \"why is this happening\", \"debug this\", \"find the root cause\".",
+      "summary": "Forms hypotheses, adds targeted instrumentation, reproduces the failure, and narrows to root cause before writing any fix — no shotgun patching based on a guess.",
+      "tags": [
+        "root-cause",
+        "instrumentation",
+        "hypotheses"
+      ]
+    },
+    "39-live-architecture-decision-recorder": {
+      "name": "Live Architecture Decision Recorder",
+      "file": "agent-extra-skills/39-live-architecture-decision-recorder.md",
+      "category": "orchestration",
+      "trigger": "A significant technical fork during a build: choosing a library, a data model shape, an auth strategy, a pattern for state management. User says \"log this decision\", \"write an A…",
+      "summary": "Automatically writes a lightweight ADR (what was decided, why, alternatives considered) at each significant technical fork, so decisions and their reasoning aren't lost by the next session.",
+      "tags": [
+        "adr",
+        "decisions",
+        "documentation"
+      ]
+    },
+    "40-spec-to-build-plan-converter": {
+      "name": "Spec-to-Build-Plan Converter",
+      "file": "agent-extra-skills/40-spec-to-build-plan-converter.md",
+      "category": "orchestration",
+      "trigger": "User has a loose product idea and wants it built, but hasn't specified a structured plan. User says \"here's my idea, build it\" or similar unstructured product asks.",
+      "summary": "Converts a loose product idea into a structured plan — data model, user flows, milestone sequence — before any code gets written, front-loading planning the way high-end app-builder tools do.",
+      "tags": [
+        "planning",
+        "spec",
+        "milestones"
+      ]
+    },
+    "41-multimodal-spec-binder": {
+      "name": "Multimodal Spec Binder",
+      "file": "agent-extra-skills/41-multimodal-spec-binder.md",
+      "category": "import",
+      "trigger": "A screenshot, error capture, or design mockup is pasted into the conversation mid-task. User says \"here's what it looks like\", \"here's the error\", \"match this design\".",
+      "summary": "Treats pasted images as first-class spec input, cross-referenced directly against the actual code — not as loose context that gets mentioned once and then ignored.",
+      "tags": [
+        "multimodal",
+        "images",
+        "spec-binding",
+        "context"
+      ]
+    },
+    "42-continuous-quality-gate": {
+      "name": "Continuous Quality Gate",
+      "file": "agent-extra-skills/42-continuous-quality-gate.md",
+      "category": "verification",
+      "trigger": "Before declaring any task \"done\" or \"complete\". User says \"is this actually ready\", \"final check before I ship this\".",
+      "summary": "Runs a fixed checklist before calling anything complete — tests, lint, types, no console warnings/errors, basic accessibility pass — and reports gate status explicitly rather than declaring completion on vibes.",
+      "tags": [
+        "quality-gate",
+        "checklist",
+        "lint",
+        "types"
+      ]
+    },
+    "43-autonomous-adversarial-reviewer": {
+      "name": "Autonomous Adversarial Reviewer",
+      "file": "agent-extra-skills/43-autonomous-adversarial-reviewer.md",
+      "category": "verification",
+      "trigger": "After generating a diff, before presenting it as final. User says \"review this like a senior engineer would\", \"be harsh about this\".",
+      "summary": "Reviews its own generated diff the way a strict senior engineer would before presenting it — catching the issues a first pass reliably misses, rather than presenting first-draft output as final.",
+      "tags": [
+        "adversarial-review",
+        "self-review",
+        "diffs"
+      ]
+    },
+    "44-prototype-to-production-hardener": {
+      "name": "Prototype-to-Production Hardener",
+      "file": "agent-extra-skills/44-prototype-to-production-hardener.md",
+      "category": "build",
+      "trigger": "Taking a fast throwaway prototype toward something real. User says \"harden this for production\", \"this was just a quick prototype, make it real\".",
+      "summary": "Systematically upgrades a prototype — error handling, input validation, security basics, env/config management — and lists exactly what was hardened and what's still a known shortcut.",
+      "tags": [
+        "hardening",
+        "validation",
+        "security",
+        "production",
+        "ops"
+      ]
+    },
+    "45-caveman-compressed-mode": {
+      "name": "Caveman Compressed Mode",
+      "file": "agent-extra-skills/45-caveman-compressed-mode.md",
+      "category": "output-style",
+      "trigger": "User explicitly requests compressed/low-token output: \"caveman mode\", \"compress this\", \"cut the filler\", \"be terse\", \"minimi",
+      "summary": "Rewrites the agent's own output into stripped-down, filler-free technical prose — dropping hedges, pleasantries, restated context, and throat-clearing — while preserving exact technical accuracy.",
+      "tags": [
+        "terse",
+        "token-efficiency",
+        "prose",
+        "compression"
+      ]
+    },
+    "accessibility": {
+      "name": "Accessibility",
+      "file": "skills/accessibility/SKILL.md",
+      "category": "verification",
+      "trigger": "When the task involves accessibility",
+      "summary": "Audit and implement accessible interfaces.",
+      "tags": [
+        "accessibility",
+        "a11y",
+        "aria",
+        "ui"
+      ]
+    },
+    "agent-coordination": {
+      "name": "Agent Coordination",
+      "file": "skills/agent-coordination/SKILL.md",
+      "category": "orchestration",
+      "trigger": "When the task involves agent coordination",
+      "summary": "Coordinate specialized Aether agents without duplicating work.",
+      "tags": [
+        "multi-agent",
+        "coordination",
+        "delegation"
+      ]
+    },
+    "api-engineering": {
+      "name": "Api Engineering",
+      "file": "skills/api-engineering/SKILL.md",
+      "category": "build",
+      "trigger": "When the task involves api engineering",
+      "summary": "Design, implement, and validate robust APIs.",
+      "tags": [
+        "api",
+        "backend",
+        "contracts"
+      ]
+    },
+    "architecture": {
+      "name": "Architecture",
+      "file": "skills/architecture/SKILL.md",
+      "category": "orchestration",
+      "trigger": "When the task involves architecture",
+      "summary": "Analyze and design maintainable software architecture.",
+      "tags": [
+        "architecture",
+        "design",
+        "boundaries",
+        "build"
+      ]
+    },
+    "autonomous-task-execution": {
+      "name": "Autonomous Task Execution",
+      "file": "skills/autonomous-task-execution/SKILL.md",
+      "category": "orchestration",
+      "trigger": "When the task involves autonomous task execution",
+      "summary": "Own a software task from request through implementation and verification.",
+      "tags": [
+        "autonomy",
+        "end-to-end",
+        "ownership"
+      ]
+    },
+    "change-impact-analysis": {
+      "name": "Change Impact Analysis",
+      "file": "skills/change-impact-analysis/SKILL.md",
+      "category": "debugging",
+      "trigger": "When the task involves change impact analysis",
+      "summary": "Identify dependencies and regression risks before significant changes.",
+      "tags": [
+        "impact-analysis",
+        "dependencies",
+        "risk"
+      ]
+    },
+    "code-review": {
+      "name": "Code Review",
+      "file": "skills/code-review/SKILL.md",
+      "category": "verification",
+      "trigger": "When the task involves code review",
+      "summary": "Perform a rigorous self-review or review another change.",
+      "tags": [
+        "review",
+        "diffs",
+        "quality"
+      ]
+    },
+    "core-engineering": {
+      "name": "Core Engineering",
+      "file": "skills/core-engineering/SKILL.md",
+      "category": "build",
+      "trigger": "When the task involves core engineering",
+      "summary": "Core engineering standards for every Aether coding task.",
+      "tags": [
+        "standards",
+        "engineering",
+        "baseline"
+      ]
+    },
+    "database": {
+      "name": "Database",
+      "file": "skills/database/SKILL.md",
+      "category": "build",
+      "trigger": "When the task involves database",
+      "summary": "Safely work with schemas, queries, indexes, transactions, and persistence.",
+      "tags": [
+        "database",
+        "sql",
+        "schemas",
+        "transactions",
+        "ops"
+      ]
+    },
+    "debugging": {
+      "name": "Debugging",
+      "file": "skills/debugging/SKILL.md",
+      "category": "debugging",
+      "trigger": "When the task involves debugging",
+      "summary": "Diagnose bugs through evidence and root-cause analysis.",
+      "tags": [
+        "root-cause",
+        "evidence",
+        "diagnosis"
+      ]
+    },
+    "dependency-management": {
+      "name": "Dependency Management",
+      "file": "skills/dependency-management/SKILL.md",
+      "category": "ops",
+      "trigger": "When the task involves dependency management",
+      "summary": "Safely select, add, update, and remove dependencies.",
+      "tags": [
+        "dependencies",
+        "updates",
+        "supply-chain",
+        "build"
+      ]
+    },
+    "documentation": {
+      "name": "Documentation",
+      "file": "skills/documentation/SKILL.md",
+      "category": "ops",
+      "trigger": "When the task involves documentation",
+      "summary": "Create and maintain accurate developer and user documentation.",
+      "tags": [
+        "documentation",
+        "readme",
+        "docs",
+        "orchestration"
+      ]
+    },
+    "frontend-engineering": {
+      "name": "Frontend Engineering",
+      "file": "skills/frontend-engineering/SKILL.md",
+      "category": "ui",
+      "trigger": "When the task involves frontend engineering",
+      "summary": "Build production-quality web interfaces and frontend systems.",
+      "tags": [
+        "frontend",
+        "react",
+        "components",
+        "web"
+      ]
+    },
+    "git-workflow": {
+      "name": "Git Workflow",
+      "file": "skills/git-workflow/SKILL.md",
+      "category": "ops",
+      "trigger": "When the task involves git workflow",
+      "summary": "Safely manage Git changes during agent-assisted development.",
+      "tags": [
+        "git",
+        "branching",
+        "commits",
+        "build"
+      ]
+    },
+    "implementation": {
+      "name": "Implementation",
+      "file": "skills/implementation/SKILL.md",
+      "category": "build",
+      "trigger": "When the task involves implementation",
+      "summary": "Implement production-quality changes with minimal, targeted edits.",
+      "tags": [
+        "implementation",
+        "edits",
+        "minimal-change"
+      ]
+    },
+    "incident-recovery": {
+      "name": "Incident Recovery",
+      "file": "skills/incident-recovery/SKILL.md",
+      "category": "debugging",
+      "trigger": "When the task involves incident recovery",
+      "summary": "Recover safely from failed commands, broken builds, regressions, and partial changes.",
+      "tags": [
+        "recovery",
+        "regressions",
+        "rollback",
+        "ops"
+      ]
+    },
+    "migrations": {
+      "name": "Migrations",
+      "file": "skills/migrations/SKILL.md",
+      "category": "build",
+      "trigger": "When the task involves migrations",
+      "summary": "Safely design and execute database or data migrations.",
+      "tags": [
+        "migrations",
+        "database",
+        "data",
+        "ops"
+      ]
+    },
+    "observability": {
+      "name": "Observability",
+      "file": "skills/observability/SKILL.md",
+      "category": "ops",
+      "trigger": "When the task involves observability",
+      "summary": "Improve logging, metrics, tracing, diagnostics, and operational visibility.",
+      "tags": [
+        "logging",
+        "metrics",
+        "tracing",
+        "debugging"
+      ]
+    },
+    "performance": {
+      "name": "Performance",
+      "file": "skills/performance/SKILL.md",
+      "category": "debugging",
+      "trigger": "When the task involves performance",
+      "summary": "Diagnose and improve application performance using evidence.",
+      "tags": [
+        "performance",
+        "profiling",
+        "optimization",
+        "testing"
+      ]
+    },
+    "planning": {
+      "name": "Planning",
+      "file": "skills/planning/SKILL.md",
+      "category": "orchestration",
+      "trigger": "When the task involves planning",
+      "summary": "Convert software requests into actionable implementation plans.",
+      "tags": [
+        "planning",
+        "spec",
+        "breakdown"
+      ]
+    },
+    "quality-gates": {
+      "name": "Quality Gates",
+      "file": "skills/quality-gates/SKILL.md",
+      "category": "verification",
+      "trigger": "When the task involves quality gates",
+      "summary": "Apply Aether's final quality gate before task completion.",
+      "tags": [
+        "quality-gate",
+        "checklist",
+        "completion"
+      ]
+    },
+    "refactoring": {
+      "name": "Refactoring",
+      "file": "skills/refactoring/SKILL.md",
+      "category": "build",
+      "trigger": "When the task involves refactoring",
+      "summary": "Safely improve code structure without changing intended behavior.",
+      "tags": [
+        "refactoring",
+        "structure",
+        "behavior-preserving",
+        "debugging"
+      ]
+    },
+    "release-engineering": {
+      "name": "Release Engineering",
+      "file": "skills/release-engineering/SKILL.md",
+      "category": "ops",
+      "trigger": "When the task involves release engineering",
+      "summary": "Prepare software changes for build, release, and deployment.",
+      "tags": [
+        "release",
+        "deploy",
+        "build"
+      ]
+    },
+    "repo-exploration": {
+      "name": "Repo Exploration",
+      "file": "skills/repo-exploration/SKILL.md",
+      "category": "import",
+      "trigger": "When the task involves repo exploration",
+      "summary": "Efficiently understand an unfamiliar repository before implementation.",
+      "tags": [
+        "exploration",
+        "codebase",
+        "onboarding",
+        "context"
+      ]
+    },
+    "research": {
+      "name": "Research",
+      "file": "skills/research/SKILL.md",
+      "category": "import",
+      "trigger": "When the task involves research",
+      "summary": "Research technical questions using authoritative evidence before making implementation decisions.",
+      "tags": [
+        "research",
+        "evidence",
+        "external-context"
+      ]
+    },
+    "security": {
+      "name": "Security",
+      "file": "skills/security/SKILL.md",
+      "category": "verification",
+      "trigger": "When the task involves security",
+      "summary": "Identify and prevent common application security problems.",
+      "tags": [
+        "security",
+        "owasp",
+        "vulnerabilities",
+        "ops"
+      ]
+    },
+    "task-memory": {
+      "name": "Task Memory",
+      "file": "skills/task-memory/SKILL.md",
+      "category": "orchestration",
+      "trigger": "When the task involves task memory",
+      "summary": "Maintain useful task context without polluting persistent memory.",
+      "tags": [
+        "memory",
+        "context",
+        "task-state"
+      ]
+    },
+    "terminal-safety": {
+      "name": "Terminal Safety",
+      "file": "skills/terminal-safety/SKILL.md",
+      "category": "ops",
+      "trigger": "When the task involves terminal safety",
+      "summary": "Safely execute shell commands and system operations.",
+      "tags": [
+        "terminal",
+        "shell",
+        "safety",
+        "build"
+      ]
+    },
+    "testing": {
+      "name": "Testing",
+      "file": "skills/testing/SKILL.md",
+      "category": "testing",
+      "trigger": "When the task involves testing",
+      "summary": "Design and execute reliable tests for software changes.",
+      "tags": [
+        "tests",
+        "coverage",
+        "reliability"
+      ]
+    },
+    "ui-design": {
+      "name": "Ui Design",
+      "file": "skills/ui-design/SKILL.md",
+      "category": "ui",
+      "trigger": "When the task involves ui design",
+      "summary": "Produce polished, coherent product interfaces instead of generic AI-generated UI.",
+      "tags": [
+        "ui",
+        "design-system",
+        "polish",
+        "states",
+        "design"
+      ]
+    }
+  }
+}

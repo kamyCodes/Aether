@@ -1,0 +1,19 @@
+PASS S1.windows-users-path: 0 matches
+PASS S1.unix-home-path: 0 matches
+PASS S1.quoted-drive-letter: 0 matches
+PASS S1.concat-literal-slash: 0 matches
+PASS S1.tilde-home-literal: 0 matches
+PASS S2.hardcoded-port: 0 matches
+PASS S2.localhost: 6 allowlisted match(es), 0 violations
+PASS S2.loopback-ip: 2 allowlisted match(es), 0 violations
+PASS S3.credential-assignment: 0 matches
+PASS S3.openai-key-shape: 0 matches
+PASS S4.model-id-literals: 0 matches
+PASS S5.mock-stub-placeholder: 97 allowlisted match(es), 0 violations
+PASS S5.todo-markers: 8 allowlisted match(es), 0 violations
+PASS S5.not-implemented: 1 allowlisted match(es), 0 violations
+PASS S6.dead-branch: 0 matches
+PASS S6.feature-env-flag: 1 allowlisted match(es), 0 violations
+PASS S7.toLocale*: 0 matches
+
+AUDIT GATE: CLEAN

@@ -1,0 +1,14 @@
+config.ts declares PORT default: 5175
+Test plan: occupy 127.0.0.1:5175 with a 418-responding placeholder HTTP server, then start Aether and observe for 20s.
+[blocker] HTTP 418 responder listening on 127.0.0.1:5175 — port is now occupied.
+[result] FALLBACK: server bound 5176 (default 5175 was occupied).
+--- server output (verbatim) ---
+Restored 2 workspace(s) from registry
+Restored 50 persisted task(s) from history
+[db] connected: PostgreSQL 18.6 on x86_64-windows — schema up to date
+[omni] auth key loaded (sk-1f****3fc5)
+[omni] gateway OK — 1354 model(s) in catalog, 109 selectable (aliases + free)
+[server] port 5175 unavailable (EADDRINUSE)
+[server] trying 5176
+Aether backend listening on http://127.0.0.1:5176 (fallback: 5175 was occupied)
+Model endpoint: http://localhost:20128/v1

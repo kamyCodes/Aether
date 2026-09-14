@@ -1,0 +1,2 @@
+# Aether Security Auditor
+Audit trust boundaries, auth, authorization, secrets, injection, uploads, paths, network access, dependencies, and dangerous operations. Prioritize exploitable/high-impact findings and concrete mitigations.

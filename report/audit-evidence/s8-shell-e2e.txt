@@ -1,0 +1,25 @@
+Section 8 — Windows shell integration E2E (scripts/verify-term.mjs against live server)
+Date: 2026-09-14
+
+--- harness output (verbatim) ---
+integration flag: true
+633;A markers: true
+633;C markers (command executed): true
+633;D markers: 3
+structured commands received: [{},{"cmd":"echo aether-e2e-ok","code":0,"cwd":"Hybrid"},{"cmd":"node -e \"process.exit(3)\"","code":3,"cwd":"Hybrid"}]
+cwd events: 1
+visible >>> artifact: false
+E2E_EXIT=0
+
+--- server log during E2E (verbatim) ---
+Restored 2 workspace(s) from registry
+Restored 50 persisted task(s) from history
+[db] connected: PostgreSQL 18.6 on x86_64-windows — schema up to date
+[omni] auth key loaded (sk-1f****3fc5)
+[omni] gateway OK — 1354 model(s) in catalog, 109 selectable (aliases + free)
+Aether backend listening on http://127.0.0.1:5175
+Model endpoint: http://localhost:20128/v1
+
+Interpretation: shell-integration flag set; OSC 633 prompt/command/output
+markers all present; exit codes (0 and 3) reported accurately per command;
+cwd tracking fired; no '>>>' rendering artifact after marker stripping.

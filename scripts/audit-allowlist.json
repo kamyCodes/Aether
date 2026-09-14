@@ -1,0 +1,59 @@
+{
+  "comment": "Allowlist for scripts/audit-gate.mjs. allowFiles: matches in these files are not violations. allowMatches: lines containing this substring are exempt. Every entry is justified in report/AUDIT.md Section 10.",
+  "allowFiles": {
+    "S1.windows-users-path": [],
+    "S1.unix-home-path": [],
+    "S1.quoted-drive-letter": [],
+    "S1.concat-literal-slash": [],
+    "S1.tilde-home-literal": [],
+    "S2.hardcoded-port": [
+      "tests/mockGuard.test.ts"
+    ],
+    "S2.localhost": [
+      "tests/mockGuard.test.ts",
+      "server/config.ts",
+      "scripts/audit-gate.mjs"
+    ],
+    "S2.loopback-ip": [
+      "server/config.ts"
+    ],
+    "S3.credential-assignment": [],
+    "S3.openai-key-shape": [],
+    "S4.model-id-literals": [],
+    "S5.mock-stub-placeholder": [
+      "server/mockGuard.ts",
+      "server/index.ts",
+      "tests/mockGuard.test.ts",
+      "scripts/mock-omni.mjs",
+      "scripts/audit-gate.mjs",
+      "scripts/audit-allowlist.json",
+      "Aether-Skill-Pack/skills-manifest.json"
+    ],
+    "S5.todo-markers": [
+      "package-lock.json",
+      "scripts/audit-gate.mjs",
+      "Aether-Skill-Pack/agent-extra-skills/01-contract-first-api-scaffolder.md",
+      "Aether-Skill-Pack/agent-extra-skills/13-accessibility-auditor.md",
+      "Aether-Skill-Pack/agent-extra-skills/35-full-app-from-prompt-builder.md"
+    ],
+    "S5.not-implemented": [
+      "scripts/audit-gate.mjs"
+    ],
+    "S6.dead-branch": [],
+    "S6.feature-env-flag": [
+      "scripts/audit-gate.mjs"
+    ],
+    "S7.toLocale*": []
+  },
+  "allowMatches": {
+    "S2.hardcoded-port": [
+      "audit-allowlist"
+    ],
+    "S2.localhost": [
+      "audit-allowlist"
+    ],
+    "S5.todo-markers": [
+      "xlink:href=\"data:image/png;base64"
+    ]
+  }
+}

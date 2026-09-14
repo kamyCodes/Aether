@@ -1,0 +1,26 @@
+# Secrets & local config — never commit
+.env
+.env.local
+models.config.json
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-server/
+
+# Dev/preview artifacts
+.freebuff/*.log
+.freebuff/*.log.err
+
+# Runtime state
+*.pid
+.freebuff/project-id
+
+# Logs
+*.log
+
+# Editor
+.vscode/
+.idea/

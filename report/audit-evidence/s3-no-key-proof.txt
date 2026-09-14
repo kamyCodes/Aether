@@ -1,0 +1,19 @@
+Section 3 — key-cleared behavior proof (fresh AETHER_HOME, no OMNIROUTE_API_KEY)
+Date: 2026-09-14
+
+Server boot (verbatim):
+[omni] OMNIROUTE_API_KEY is not set — requests will be unauthenticated. Set it in the environment or Settings.
+
+POST /api/chat with zero credentials configured anywhere (verbatim):
+data: {"type":"error","error":"Chat request failed: 400 Bad Request {\"error\":{\"message\":\"Unable to determine provider for model 'mock-coder'. Use a provider/model prefix (e.g. openai/mock-coder) or ensure the model is added as a combo entry.\",\"type\":\"invalid_request_error\",\"code\":\"bad_request\"}}"}
+
+Conclusion: with all keys cleared the feature fails with a named upstream
+error — no plausible output is produced without credentials.
+
+Negative control (honesty note): with ONLY the env var cleared but a key
+present in ~/.aether/settings.json, chat succeeds — key precedence is
+settings-store first, env second, by design. The proof above therefore used
+a completely fresh AETHER_HOME with no settings file.
+
+Key masking in logs (captured during Section 2/8 runs):
+[omni] auth key loaded (sk-1f****3fc5)

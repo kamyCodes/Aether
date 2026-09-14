@@ -1,0 +1,33 @@
+name: audit-gate
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  audit:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Production-readiness search gate (audit Sections 1–7 patterns).
+      # scripts/audit-gate.mjs exits 1 on any non-allowlisted match; the
+      # allowlist is versioned in scripts/audit-allowlist.json and every
+      # entry must carry a justification in report/AUDIT.md.
+      - name: Audit search gate
+        run: node scripts/audit-gate.mjs .
+      - name: Typecheck + CSS lint
+        run: npm run typecheck
+      # tests/audit-gate.test.ts re-runs the gate inside the suite, so the
+      # search gate is enforced even if this workflow file is removed.
+      - name: Tests
+        run: npm test

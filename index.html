@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#14161c" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/aether-icon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/aether-icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/aether-icon-180.png" />
+    <title>Aether — AI Development Environment</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Apply the persisted theme before React mounts — kills the
+      // dark→default flash on load. App.tsx mirrors the theme to
+      // localStorage on every change; this reads it back pre-render.
+      // 'oled' gets a pure-black background immediately; anything unknown
+      // falls through to the default dark palette (no FOUC either way).
+      (function () {
+        try {
+          var t = localStorage.getItem('aether-theme');
+          if (t === 'dark' || t === 'light' || t === 'oled') {
+            document.documentElement.dataset.theme = t;
+            if (t === 'oled') document.documentElement.style.background = '#000';
+            var m = document.querySelector('meta[name=theme-color]');
+            if (m) m.content = t === 'light' ? '#f6f7fb' : t === 'oled' ? '#000' : '#14161c';
+          }
+        } catch (e) { /* storage unavailable — default theme applies */ }
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

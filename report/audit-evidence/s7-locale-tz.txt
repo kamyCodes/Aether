@@ -1,0 +1,13 @@
+Section 7 — locale/timezone behavior proof
+Date: 2026-09-14
+
+Intl-based formatting (src/utils/dates.ts) — same instant, explicit timezones:
+UTC  : Sep 14, 2026, 12:00 PM
+Tokyo: Sep 14, 2026, 9:00 PM
+NY   : Sep 14, 2026, 8:00 AM
+TZ=Asia/Tokyo, default-tz format: 9:00 PM
+
+Sources contain zero toLocaleString()/toLocaleDateString() calls
+(gate check S7.toLocale*: 0 matches — see final-gate.txt).
+All user-visible dates route through Intl.DateTimeFormat(undefined, ...)
+which follows the user's locale and timezone at render time.

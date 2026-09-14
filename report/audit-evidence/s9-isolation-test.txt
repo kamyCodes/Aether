@@ -1,0 +1,22 @@
+[env] isolated AETHER_HOME: C:\Users\Kamy\AppData\Local\Temp\aether-s9-PZM2Tc
+
+[part1] 8 concurrent processes × 25 atomic writes to one settings.json
+[part1] all 8 writers exited 0
+[part1] final file parses, contains one complete writer payload (accent=worker-7-24), defaults intact — PASS
+
+[part2] hand-written old-schema settings file (null branches + unknown fields)
+[part2] wrote: {"omni": null, "ui": {"theme": "light", "fontSize": 15}, "agent": {"autonomy": null}, "legacyUnknownTopLevel": true}
+[part2] merge probe PASS — user values preserved (light/15), defaults filled (http://127.0.0.1:20128/v1, review)
+
+[part2b] booting the real server against the old-schema AETHER_HOME
+[part2b] server booted and bound a port against the old-schema settings — PASS
+--- server boot output (verbatim) ---
+[skills] imported 75 skill-pack skills (0 already present)
+[db] connected: PostgreSQL 18.6 on x86_64-windows — schema up to date
+[omni] OMNIROUTE_API_KEY is not set — requests will be unauthenticated. Set it in the environment or Settings.
+[omni] gateway UNREACHABLE at http://127.0.0.1:5198/v1: fetch failed — AI features are disabled until reconnected.
+Aether backend listening on http://127.0.0.1:5199
+Model endpoint: http://127.0.0.1:5198/v1
+
+
+RESULT: PASS

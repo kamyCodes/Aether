@@ -1,0 +1,103 @@
+    // 6b. VERIFICATION with auto-repair. When the agent stops calling tools,
+    // run the project's checks. If a check fails, surface it as a live
+    // in_progress step in the Task List and feed the error back into the
+    // loop so the agent retries the failed build (up to repairRounds times)
+    // instead of silently completing a broken workspace.
+    const verification: VerificationEntry[] = [];
+    const repairRounds = task.mode === 'agent' ? 2 : 0;
+    let repairRound = 0;
+    let verifyResult: { failedCmd: string; output: string } | null = null;
+
+    for (;;) {
+      this.setStatus(task.id, 'verifying');
+      verifyResult = null;
+      if (task.mode === 'agent' && task.filesChanged.length) {
+        for (const cmd of ['npm run build', 'npm test']) {
+          if (signal.aborted) break;
+          try {
+            const r = await this.terms.exec(cmd, ws.root, 120_000, signal);
+            const ok = r.code === 0;
+            const output = (`exit=${r.code}\n` + [r.stdout, r.stderr].filter(Boolean).join('\n')).slice(0, 4000);
+            verification.push({ command: cmd, output, ok, ts: Date.now() });
+            if (ok) {
+              this.activity(task.id, `Verified: ${cmd}`, 'done');
+              this.completeVerifyStep(task.id, cmd, true);
+              break; // first successful check is enough
+            }
+            this.activity(task.id, `Verification failed: ${cmd}`, 'error');
+            if (!verifyResult) verifyResult = { failedCmd: cmd, output };
+          } catch (err) {
+            const out = err instanceof Error ? err.message : String(err);
+            verification.push({ command: cmd, output: out.slice(0, 4000), ok: false, ts: Date.now() });
+            this.activity(task.id, `Verification failed: ${cmd}`, 'error');
+            if (!verifyResult) verifyResult = { failedCmd: cmd, output: out };
+          }
+        }
+      }
+
+      // Checks passed (or nothing to verify, or aborting) — leave the loop.
+      if (!verifyResult || signal.aborted || repairRound >= repairRounds) {
+        // Exhausted repairs with a still-failing check: honest failure in the
+        // Task List and history — never a silent success.
+        if (verifyResult && repairRound >= repairRounds) {
+          this.completeVerifyStep(task.id, verifyResult.failedCmd, false);
+          task.error = `Verification failed after ${repairRound} repair round(s): ${verifyResult.failedCmd}`;
+          this.setStatus(task.id, 'failed');
+          await store.endSession(this.dbSessions.get(task.id) ?? null, 'failed');
+          this.dbSessions.delete(task.id);
+          throw new Error(task.error);
+        }
+        break;
+      }
+
+      // Auto-repair round: visible Task List step + the error back to the model.
+      repairRound++;
+      this.activity(task.id, `Repair round ${repairRound}/${repairRounds}: fixing ${verifyResult.failedCmd}`, 'running');
+      this.addRepairStep(task.id, `Fix ${verifyResult.failedCmd} (repair ${repairRound})`);
+      messages.push(
+        { role: 'assistant', content: result.text || null, tool_calls: result.toolCalls?.length ? result.toolCalls.map((tc) => ({ id: tc.id, type: 'function', function: { name: tc.name, arguments: tc.arguments } })) : undefined },
+        { role: 'user', content: `VERIFICATION FAILED — ${verifyResult.failedCmd} exited non-zero. Fix the errors and then finish. Output (trimmed):\n${verifyResult.output.slice(0, 3000)}` },
+      );
+      this.setStatus(task.id, 'running');
+      const repair = await this.chatWithRetry(task, messages, signal, ws, dbSessionId);
+      result = repair.result;
+      finalText = result.text || finalText;
+      // Run any repair tool calls through the same execution path as the
+      // main loop so diffs/steps/DB rows stay consistent.
+      if (result.toolCalls.length) {
+        messages.push({ role: 'assistant', content: result.text || null, tool_calls: result.toolCalls.map((tc) => ({ id: tc.id, type: 'function', function: { name: tc.name, arguments: tc.arguments } })) });
+        for (const tc of result.toolCalls) {
+          let args: Record<string, unknown> = {};
+          try { args = JSON.parse(tc.arguments || '{}'); } catch { /* malformed */ }
+          const filePath = typeof args.path === 'string' ? (args.path as string) : null;
+          this.advanceSteps(task.id);
+          if (filePath) this.markStep(task.id, filePath, 'in_progress');
+          const out = await this.tools.run(tc.name, args, { workspaceId: wsId, taskId: task.id, cwd: ws.root, autoApprove: false, signal });
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: out });
+          const changed = (args.path as string) ?? undefined;
+          if (changed && !task.filesChanged.includes(changed)) task.filesChanged.push(changed);
+          // Record repair diffs like the main loop does.
+          if (filePath && (tc.name === 'write_file' || tc.name === 'edit_file' || tc.name === 'delete_file')) {
+            let post: string | null = null;
+            try { post = await this.ws.readFile(wsId, filePath); } catch { post = null; }
+            const artifact = buildDiffArtifact(filePath, '', post, tc.name === 'delete_file');
+            if (artifact) {
+              const prev = task.diffs?.find((d) => d.path === filePath && d.ts > Date.now() - 60_000);
+              if (prev) {
+                const merged = buildDiffArtifact(filePath, prev.oldContent ?? '', post, false);
+                if (merged) Object.assign(prev, merged, { ts: Date.now() });
+              } else {
+                task.diffs = [...(task.diffs ?? []), artifact];
+                bus.emit('agent:diff', { taskId: task.id, diff: artifact });
+              }
+            }
+            if (filePath && dbProjectId) await store.upsertFile(dbProjectId, filePath, typeof args.content === 'string' ? (args.content as string) : null).catch(() => {});
+          }
+          if (filePath && !/not found|ERROR/i.test(out)) this.markStep(task.id, filePath, 'done');
+          this.persist(task.id);
+        }
+      }
+      // Loop back to re-run verification.
+    }
+    this.markRepairStepsDone(task.id);
+

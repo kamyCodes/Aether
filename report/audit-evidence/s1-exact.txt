@@ -1,0 +1,12 @@
+=== EXACT CMD 1: rg -n 'C:\\Users' -t ts -t tsx -t js -t jsx -t json ===
+rg: unrecognized file type: tsx
+exit=2
+=== EXACT CMD 2: rg -n '/home/[a-zA-Z0-9_]+' -t ts -t tsx -t js -t jsx -t json ===
+rg: unrecognized file type: tsx
+exit=2
+=== EXACT CMD 3: rg -n '"[A-Za-z]:\\' -t ts -t tsx -t js -t jsx -t json ===
+rg: unrecognized file type: tsx
+exit=2
+=== EXACT CMD 4: rg -n '\+\s*[\x27"]/[a-zA-Z]' -t ts -t tsx -t js -t jsx -t json ===
+rg: unrecognized file type: tsx
+exit=2
