@@ -6,6 +6,11 @@
     "output": "release",
     "buildResources": "build"
   },
+  "publish": {
+    "provider": "github",
+    "owner": "kamyCodes",
+    "repo": "Aether"
+  },
   "files": [
     "dist/**/*",
     "dist-server/**/*",

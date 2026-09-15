@@ -12,6 +12,7 @@ import { spawn, ChildProcess } from 'node:child_process';
 import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
+import { initAutoUpdate } from './autoUpdater';
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 // Packaged layout (asar OFF): <install>/resources/app/{dist,dist-server,...}.
@@ -122,6 +123,10 @@ function createWindow(): void {
 app.whenReady().then(async () => {
   try {
     if (!isDev) await startBackend();
+    // DORMANT: logs the disabled notice unless AETHER_AUTO_UPDATE=1 (see
+    // electron/autoUpdater.ts). Kept in the boot path so the flag is
+    // exercisable in packaged builds the moment activation is approved.
+    initAutoUpdate((line) => process.stdout.write(`${line}\n`));
     createWindow();
   } catch (e) {
     dialog.showErrorBox(

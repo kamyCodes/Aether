@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    // Bundler resolution: the electron main is bundled by esbuild (see
+    // scripts/build-windows-installer.mjs), which accepts extensionless
+    // relative imports — NodeNext would reject `./autoUpdater`.
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "types": ["node"]
+  },
+  "include": ["./**/*.ts"]
+}
