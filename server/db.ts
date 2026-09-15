@@ -24,25 +24,70 @@ export function projectRoot(): string {
  * every write is fire-and-forget with logged errors.
  */
 
-const config: pg.PoolConfig = process.env.DATABASE_URL
-  ? {
-      connectionString: process.env.DATABASE_URL,
-      max: 10,
-      idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 5_000,
-    }
-  : {
-      host: PG_HOST,
-      port: PG_PORT,
-      user: process.env.PGUSER ?? 'postgres',
-      password: process.env.PGPASSWORD ?? '',
-      database: process.env.PGDATABASE ?? 'aether_db',
-      max: 10,
-      idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 5_000,
-    };
+const config: pg.PoolConfig = buildPoolConfig();
 
-export const pool = new pg.Pool(config);
+/** Pool config from DATABASE_URL or discrete PG* vars (env only — never
+ *  hardcoded). Rebuilt at runtime by reconfigurePool() when setup writes new
+ *  connection settings. */
+function buildPoolConfig(): pg.PoolConfig {
+  return process.env.DATABASE_URL
+    ? {
+        connectionString: process.env.DATABASE_URL,
+        max: 10,
+        idleTimeoutMillis: 30_000,
+        connectionTimeoutMillis: 5_000,
+      }
+    : {
+        host: PG_HOST,
+        port: PG_PORT,
+        user: process.env.PGUSER ?? 'postgres',
+        password: process.env.PGPASSWORD ?? '',
+        database: process.env.PGDATABASE ?? 'aether_db',
+        max: 10,
+        idleTimeoutMillis: 30_000,
+        connectionTimeoutMillis: 5_000,
+      };
+}
+
+/**
+ * Test a connection string WITHOUT touching the live pool — runs a real
+ * `SELECT version()` on a throwaway client. Used by the setup wizard's
+ * database step (a real query, not a ping).
+ */
+export async function testConnectionString(connectionString: string): Promise<string> {
+  const client = new pg.Client({
+    connectionString,
+    connectionTimeoutMillis: 5_000,
+  });
+  try {
+    await client.connect();
+    const r = await client.query('SELECT version() AS v');
+    return String(r.rows[0]?.v ?? 'PostgreSQL');
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
+/**
+ * Swap the live pool to a new connection string: probe first (throwaway
+ * client), only then drain and replace. The old pool is ended in the
+ * background — in-flight queries finish on it.
+ */
+export async function reconfigurePool(connectionString: string): Promise<string> {
+  const version = await testConnectionString(connectionString); // throws on bad target
+  const old = pool;
+  pool = new pg.Pool({
+    connectionString,
+    max: 10,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 5_000,
+  });
+  dbReady = true;
+  void old.end().catch(() => {});
+  return version;
+}
+
+export let pool = new pg.Pool(config);
 
 /** True when the last health check (or a successful query) succeeded. */
 export let dbReady = false;

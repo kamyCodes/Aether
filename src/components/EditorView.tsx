@@ -133,6 +133,13 @@ export function EditorView({ tab }: { tab: OpenTab }) {
 
   const onMount: OnMount = (editor) => {
     editorRef.current = editor;
+    // Register as the active undo/redo target for the top-bar buttons —
+    // overwritten by whichever editor mounts last; cleared on dispose.
+    (window as unknown as { __aetherActiveEditor?: unknown }).__aetherActiveEditor = editor;
+    editor.onDidDispose(() => {
+      const w = window as unknown as { __aetherActiveEditor?: unknown };
+      if (w.__aetherActiveEditor === editor) w.__aetherActiveEditor = undefined;
+    });
   };
 
   // Ctrl+S handled globally; expose a save button for dirty files

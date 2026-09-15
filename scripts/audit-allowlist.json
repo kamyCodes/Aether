@@ -6,9 +6,27 @@
     "S1.quoted-drive-letter": [],
     "S1.concat-literal-slash": [],
     "S1.tilde-home-literal": [],
-    "S2.hardcoded-port": ["tests/mockGuard.test.ts"],
-    "S2.localhost": ["tests/mockGuard.test.ts", "server/config.ts", "scripts/audit-gate.mjs"],
-    "S2.loopback-ip": ["server/config.ts"],
+    "S2.hardcoded-port": [
+      "tests/mockGuard.test.ts",
+      "tests/setupFirstRun.test.ts",
+      "tests/settingsRecovery.test.ts",
+      "src/components/SetupWizard.tsx",
+      "electron/main.ts",
+      "server/setup.ts"
+    ],
+    "S2.localhost": [
+      "tests/mockGuard.test.ts",
+      "server/config.ts",
+      "scripts/audit-gate.mjs",
+      "src/components/SetupWizard.tsx",
+      "server/setup.ts"
+    ],
+    "S2.loopback-ip": [
+      "server/config.ts",
+      "electron/main.ts",
+      "tests/setupFirstRun.test.ts",
+      "scripts/smoke-packaged.mjs"
+    ],
     "S3.credential-assignment": [],
     "S3.openai-key-shape": [],
     "S4.model-id-literals": [],
@@ -16,7 +34,6 @@
       "server/mockGuard.ts",
       "server/index.ts",
       "tests/mockGuard.test.ts",
-      "scripts/mock-omni.mjs",
       "scripts/audit-gate.mjs",
       "scripts/audit-allowlist.json",
       "Aether-Skill-Pack/skills-manifest.json"

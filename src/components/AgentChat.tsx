@@ -591,7 +591,18 @@ function PlanArtifact({
   );
 }
 
-/** Explicit failure state: retry, switch model, honest terminal display. */
+/**
+ * Errors that are the model gateway's fault (timeout, unavailable upstream,
+ * rate limit) — the only class worth offering "Retry / Switch model" for.
+ * Anything else (bad request, verification failure, bug) can't be fixed by
+ * re-rolling the dice on another model, so the card stays informational.
+ */
+const MODEL_SIDE_ERROR =
+  /timeout|timed out|unavailable|gateway|\b5\d\d\b|\b429\b|rate.?limit|empty responses|failed \(2 attempts\)|failed to fetch|network/i;
+
+/** Explicit failure state: honest terminal display. Retry / switch-model
+ *  actions appear only for model-side failures (timeout, gateway down);
+ *  every failure card is dismissible. */
 function FailureCard({
   task,
 }: {
@@ -599,52 +610,68 @@ function FailureCard({
 }) {
   const models = useStore((s) => s.models);
   const startTask = useStore((s) => s.startTask);
+  const [dismissed, setDismissed] = useState(false);
   const [switchModel, setSwitchModel] = useState(false);
   const [picked, setPicked] = useState('');
+  // The run's own bubbles may already carry the story; X closes the card
+  // (the task history keeps the full error either way).
+  if (dismissed) return null;
+  const modelSide = MODEL_SIDE_ERROR.test(task.error ?? '');
   return (
     <div className="ac-failure fade-in">
       <div className="ac-failure-head">
         <X size={13} className="icon-err" />
         <span className="ac-failure-title">Task failed</span>
         <span className="ac-failure-detail">{task.error ?? 'Unknown error'}</span>
-      </div>
-      {/* Liquid Glass actions */}
-      <div className="choice-row">
-        <GlassButton
-          className="primary btn-glass glass"
-          onClick={() => void startTask(task.prompt, task.mode as 'agent')}
+        <button
+          className="ac-failure-close"
+          title="Dismiss"
+          onClick={() => setDismissed(true)}
         >
-          <RotateCw size={11} /> Retry
-        </GlassButton>
-        <GlassButton className="btn-glass glass" onClick={() => setSwitchModel((v) => !v)}>
-          <FileCode2 size={11} /> Switch model
-        </GlassButton>
+          <X size={11} />
+        </button>
       </div>
-      {switchModel && (
-        <div className="choice-row fade-in">
-          <select
-            value={picked}
-            onChange={(e) => setPicked(e.target.value)}
-            style={{ maxWidth: 220 }}
-          >
-            <option value="">Pick a model…</option>
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.id}
-              </option>
-            ))}
-          </select>
-          <button
-            className="primary"
-            disabled={!picked}
-            onClick={() => {
-              useStore.setState({ chatModel: picked });
-              void startTask(task.prompt, task.mode as 'agent');
-            }}
-          >
-            Retry with {picked || '…'}
-          </button>
-        </div>
+      {modelSide && (
+        <>
+          {/* Liquid Glass actions — only when another attempt could help. */}
+          <div className="choice-row">
+            <GlassButton
+              className="primary btn-glass glass"
+              onClick={() => void startTask(task.prompt, task.mode as 'agent')}
+            >
+              <RotateCw size={11} /> Retry
+            </GlassButton>
+            <GlassButton className="btn-glass glass" onClick={() => setSwitchModel((v) => !v)}>
+              <FileCode2 size={11} /> Switch model
+            </GlassButton>
+          </div>
+          {switchModel && (
+            <div className="choice-row fade-in">
+              <select
+                value={picked}
+                onChange={(e) => setPicked(e.target.value)}
+                style={{ maxWidth: 220 }}
+              >
+                <option value="">Pick a model…</option>
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.id}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="primary"
+                disabled={!picked}
+                onClick={() => {
+                  useStore.setState({ chatModel: picked });
+                  void startTask(task.prompt, task.mode as 'agent');
+                }}
+              >
+                Retry with {picked || '…'}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

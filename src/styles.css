@@ -336,6 +336,55 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+/* ---- Light theme: glass language is dark-theme-only ----
+   Glass surfaces carry white text (the dark chrome they were designed
+   against); on the pale palette they rendered white-on-white — invisible
+   button labels, dropdown items, toggle knobs. Restore solid surfaces and
+   readable ink instead of filtering every glass element per-component. */
+[data-theme='light'] .btn-glass {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(35, 45, 80, 0.1);
+}
+[data-theme='light'] .btn-glass:hover {
+  background: var(--hover);
+  border-color: var(--border-strong);
+}
+[data-theme='light'] .btn-shine {
+  background: linear-gradient(115deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+}
+[data-theme='light'] .glass.dd-content {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: var(--shadow-float);
+}
+[data-theme='light'] .dd-item { color: var(--text); }
+[data-theme='light'] .dd-item:hover,
+[data-theme='light'] .dd-item[data-highlighted] { background: var(--hover); color: var(--text); }
+[data-theme='light'] .dd-item[data-checked] { color: var(--accent); font-weight: 600; }
+[data-theme='light'] .dd-item:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); }
+[data-theme='light'] .dd-group-label { color: var(--text-faint); }
+[data-theme='light'] .segment-indicator-fill-fm {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  box-shadow: var(--seg-active-shadow);
+}
+[data-theme='light'] .bubble-agent {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+}
+[data-theme='light'] .glass.toggle-track {
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+}
+[data-theme='light'] .glass.toggle-track[data-state='checked'] {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 55%, white), color-mix(in srgb, var(--accent) 35%, white));
+  border-color: color-mix(in srgb, var(--accent) 60%, white);
+}
+
 /* ============================================================
    ---- Radix/Framer behavior layer (components/glass.tsx) ----
    The vanilla driver in lib/glass.ts keeps serving .mode-toggle/
@@ -449,7 +498,7 @@ label > .settings-dd { margin-top: 3px; width: 100%; display: inline-flex; }
 }
 
 /* ============================================================
-   LIQUID GLASS — end shared system */
+   LIQUID GLASS — end shared system
    ============================================================ */
 
 [data-theme='dark'] {
@@ -646,6 +695,8 @@ input, textarea, select {
 }
 .titlebar .logo { font-weight: 600; font-size: 13px; letter-spacing: 0.1px; color: var(--text); display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; flex-shrink: 0; }
 .titlebar .logo-tagline { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+.titlebar .hist-buttons { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.titlebar .hist-buttons .tb-icon-btn:disabled { opacity: 0.35; cursor: default; }
 .titlebar button { white-space: nowrap; }
 .titlebar .logo svg { color: var(--accent); }             /* brand mark only */
 .titlebar .title-center {
@@ -716,9 +767,13 @@ input, textarea, select {
 .traffic-lights .tl.max { background: #28c840; }
 
 /* Connection status: accent glow, not generic green */
+/* Connection dot: fixed semantic colors only — green = connected,
+   red = offline, yellow pulsing = connecting. Never accent-colored. */
 .conn-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
-.conn-dot.ok { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), 0 0 10px var(--accent-glow); }
+.conn-dot.ok { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
 .conn-dot.bad { background: var(--err); box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 15%, transparent); }
+.conn-dot.connecting { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 15%, transparent); animation: conn-pulse 1.2s ease-in-out infinite; }
+@keyframes conn-pulse { 50% { opacity: 0.35; } }
 
 .main { display: flex; flex: 1; min-height: 0; padding: 8px; gap: 8px; background: var(--bg); }
 
@@ -851,6 +906,15 @@ input, textarea, select {
 .tree-item .icon { width: 16px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .file-ico { display: inline-flex; align-items: center; width: 16px; flex: none; }
 .tree-item span[style], .file-ico span { user-select: none; }
+/* Workspace rows: name truncates, close button appears on hover */
+.tree-item .ws-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-item .ws-close {
+  display: inline-flex; flex: none; padding: 2px; border: none; background: transparent;
+  color: var(--text-faint); border-radius: 4px; opacity: 0; transition: opacity var(--t-fast) ease;
+}
+.tree-item:hover .ws-close, .tree-item .ws-close:focus-visible { opacity: 1; }
+.tree-item .ws-close:hover { color: var(--err); background: var(--hover); }
+.tree-item .ws-close:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 1px; }
 
 /* Review pending changes: file list + diff side by side. */
 .review-panel { display: flex; gap: 12; align-items: stretch; }
@@ -1140,9 +1204,12 @@ input, textarea, select {
   padding: 8px 10px; font-family: inherit; font-size: 12.5px; line-height: 1.45;
 }
 .composer textarea:focus { outline: none; border-color: var(--accent); }
-.composer-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.composer-row .mode-toggle { flex: 1; min-width: 0; }
-.composer-row .mode-toggle .segmented { display: inline-flex; flex-wrap: nowrap; }
+.composer-row { display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; min-width: 0; }
+.composer-row > * { min-width: 0; }
+.composer-row .mode-toggle { flex: 1 1 140px; min-width: 120px; }
+.composer-row .mode-toggle .segmented { display: inline-flex; flex-wrap: nowrap; width: 100%; }
+.composer-row .mode-toggle .segmented .segment { flex: 1 1 0; min-width: 0; justify-content: center; padding-left: 6px; padding-right: 6px; }
+.composer-row .mode-toggle .segmented .segment .segment-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .composer-row .autonomy-select { min-width: 0; max-width: 100%; }
 .composer-row .model-select { min-width: 0; max-width: 180px; flex-shrink: 1; }
 .composer-row select { max-width: 180px; }
@@ -1770,6 +1837,48 @@ input, textarea, select {
 
 .palette-section { padding: 6px 14px; font-size: 11px; font-weight: 600; color: var(--text-faint); }
 
+/* ---------- First-run setup wizard ---------- */
+.setup-overlay { z-index: 200; }
+.setup-modal { width: 560px; }
+.setup-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); font-size: 13px; }
+.setup-stepper { display: inline-flex; gap: var(--space-1); }
+.setup-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); transition: background var(--t-fast) var(--ease-standard); }
+.setup-dot.on { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.setup-dot.done { background: var(--ok); }
+.setup-body { flex: 1; overflow: auto; min-height: 0; padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+.setup-body h3 { display: inline-flex; align-items: center; gap: var(--space-2); margin: 0; font-size: 12.5px; font-weight: 600; color: var(--text); }
+.setup-note { font-size: 11.5px; color: var(--text-dim); margin: 0; display: flex; align-items: center; gap: var(--space-1); }
+.setup-note.warn { color: var(--warn); }
+.setup-detail { font-size: 11px; color: var(--text-faint); font-family: var(--mono); margin: 0; word-break: break-all; }
+.setup-field { display: flex; flex-direction: column; gap: var(--space-1); }
+.setup-field label { font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; }
+.setup-field input { background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-input); padding: var(--space-2) var(--space-3); font-size: 12.5px; color: var(--text); }
+/* Inline "how do I get this?" help inside wizard steps */
+.setup-help {
+  border: 1px solid var(--border); border-radius: var(--r-control);
+  background: var(--bg-canvas-soft); padding: 8px 12px; margin: 4px 0;
+  font-size: 12px; color: var(--text-dim);
+}
+.setup-help summary { cursor: pointer; color: var(--text); font-weight: 500; user-select: none; }
+.setup-help ol { margin: 8px 0 2px; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.setup-help code { font-family: var(--mono); font-size: 11px; background: var(--bg-elev); padding: 1px 4px; border-radius: 4px; }
+.setup-field input:focus { border-color: var(--accent); outline: none; }
+.setup-inputrow { display: flex; gap: var(--space-2); }
+.setup-inputrow input { flex: 1; min-width: 0; }
+.setup-check { display: inline-flex; align-items: center; gap: var(--space-2); font-size: 11.5px; padding: var(--space-1) var(--space-2); border-radius: var(--radius-badge); }
+.setup-check.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.setup-check.fail { color: var(--err); background: color-mix(in srgb, var(--err) 10%, transparent); }
+.setup-ack { display: inline-flex; align-items: center; gap: var(--space-2); font-size: 11.5px; color: var(--text-dim); cursor: pointer; }
+.setup-summary { display: flex; flex-direction: column; gap: var(--space-1); }
+.setup-summary > div { display: flex; gap: var(--space-3); font-size: 11.5px; align-items: baseline; }
+.setup-summary span { width: 110px; flex-shrink: 0; color: var(--text-dim); }
+.setup-summary code { font-family: var(--mono); font-size: 11px; color: var(--text); word-break: break-all; }
+.setup-final { display: flex; flex-direction: column; gap: var(--space-1); }
+.setup-foot { display: flex; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border); }
+.setup-banner { position: fixed; top: var(--space-2); left: 50%; transform: translateX(-50%); z-index: 150; display: inline-flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--warn); border-radius: var(--r-control); background: color-mix(in srgb, var(--warn) 12%, var(--bg-elev)); font-size: 12px; }
+.setup-banner.warn span { color: var(--warn); }
+.setup-banner button { font-size: 11px; padding: 2px 8px; }
+
 /* ================= Composer — persistent bottom-pinned input bar ================= */
 
 .composer {
@@ -1800,10 +1909,12 @@ input, textarea, select {
   font-size: 12.5px; line-height: 1.5;
   min-height: 36px; max-height: 120px;
 }
-.composer-row { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
-.composer-row .mode-toggle { flex: 1; min-width: 0; }
+.composer-row { display: flex; gap: 6px; align-items: center; margin-top: 6px; flex-wrap: nowrap; min-width: 0; }
+.composer-row .mode-toggle { flex: 1 1 140px; min-width: 120px; }
+.composer-row .mode-toggle .segmented .segment { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 6px; }
 .composer-row .model-select { min-width: 0; max-width: 180px; flex-shrink: 1; }
-.composer-row .autonomy-select { min-width: 0; max-width: 100%; }
+.composer-row .autonomy-select { min-width: 0; max-width: 120px; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.composer-row .autonomy-select .dd-chevron { flex-shrink: 0; }
 .composer-row select { max-width: 180px; }
 .composer .send { margin-left: auto; flex-shrink: 0; }
 .composer-attach { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; color: var(--text-dim); font-size: 11px; padding: 4px; border-radius: 4px; }
@@ -2124,6 +2235,8 @@ button svg { vertical-align: -2px; margin-right: 4px; }
 .ac-failure-head { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .ac-failure-title { font-size: 12px; font-weight: 600; color: var(--err, #e5725f); }
 .ac-failure-detail { font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.ac-failure-close { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: none; border-radius: 5px; background: transparent; color: var(--text-dim); cursor: pointer; flex-shrink: 0; }
+.ac-failure-close:hover { background: color-mix(in srgb, var(--err, #e5725f) 15%, transparent); color: var(--text-main); }
 
 /* Work-items wrapper + autonomy select */
 .ac-work { display: flex; flex-direction: column; gap: 4px; align-self: stretch; }
@@ -2133,6 +2246,8 @@ button svg { vertical-align: -2px; margin-right: 4px; }
 .autonomy-select.btn-glass, .model-select.btn-glass { padding: 6px 12px; font-size: 11px; box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35), 0 4px 14px rgba(0, 0, 0, 0.25); }
 
 /* Model health dot (composer, next to the selector) */
+/* Model-health dot: semantic colors only (green ok / red failing / yellow
+   connecting-style cooldown), never the accent — same rule as .conn-dot. */
 .model-health-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
 .model-health-dot.ok { background: var(--ok, #4cc38a); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok, #4cc38a) 20%, transparent); }
 .model-health-dot.failing { background: var(--err, #e5725f); box-shadow: 0 0 0 2px color-mix(in srgb, var(--err, #e5725f) 22%, transparent); }
@@ -2259,10 +2374,10 @@ button svg { vertical-align: -2px; margin-right: 4px; }
 
 /* ---------- Skill editor (add-skill form) ---------- */
 .skill-editor {
-  width: 400px; flex-shrink: 0;
+  /* Floating modal (shares .modal shell from SkillsPanel wrapper) — the
+     editor itself only contributes head/body/foot layout. */
   display: flex; flex-direction: column;
-  background: var(--bg-elev);
-  border-left: 1px solid var(--border);
+  min-height: 0;
   overflow: hidden;
 }
 .skill-editor-head {

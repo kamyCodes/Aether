@@ -12,23 +12,38 @@ export function PreviewPanel() {
   const [device, setDevice] = useState<keyof typeof SIZES>('desktop');
   const [input, setInput] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
 
   async function start() {
-    if (!workspaceId) return;
+    if (!workspaceId) {
+      useStore.getState().showToast('Open a workspace folder first — the preview serves your project files.');
+      return;
+    }
+    setStarting(true);
     try {
       const r = await post<{ url: string }>('/preview/start', { workspaceId });
       setUrl(r.url);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setStarting(false);
     }
   }
+
+  // Auto-start when a workspace is present — the panel should show content,
+  // not a dead “Start Preview” screen the user has to discover.
+  useEffect(() => {
+    if (workspaceId && !url) void start();
+    if (!workspaceId) { setUrl(''); setError(null); }
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [workspaceId]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="preview-toolbar">
-        <button className="primary" onClick={() => void start()}>
-          Start Preview
+        <button className="primary" onClick={() => void start()} disabled={!workspaceId || starting}>
+          {starting ? 'Starting…' : url ? 'Restart' : 'Start Preview'}
         </button>
         {/* Liquid Glass: Radix ToggleGroup + layoutId indicator */}
         <GlassSegmentedControl
@@ -76,11 +91,18 @@ export function PreviewPanel() {
             style={{ width: SIZES[device] }}
             title="preview"
           />
-        ) : (
+        ) : workspaceId ? (
           <div className="empty-state">
             <div>Live preview serves the workspace over HTTP with reload-on-change.</div>
             <div style={{ fontSize: 11 }}>
               Best for static sites / built output. Start a dev server in the terminal for HMR apps.
+            </div>
+          </div>
+        ) : (
+          <div className="empty-state">
+            <div>No workspace open.</div>
+            <div style={{ fontSize: 11 }}>
+              Open a folder first — the preview serves your project over HTTP.
             </div>
           </div>
         )}

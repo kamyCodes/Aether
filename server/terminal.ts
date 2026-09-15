@@ -4,6 +4,11 @@ import { spawn } from 'node:child_process';
  * terminal panel. One process per session, streamed over the WebSocket bus.
  */
 import { EventEmitter } from 'node:events';
+import { createRequire } from 'node:module';
+
+/** ESM-safe `require` — this project is "type": "module", so a bare
+ *  require.resolve would throw ReferenceError and silently disable the PTY. */
+const require = createRequire(import.meta.url);
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

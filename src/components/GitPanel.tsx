@@ -21,6 +21,9 @@ interface Commit {
 
 export function GitPanel() {
   const workspaceId = useStore((s) => s.workspaceId);
+  // New file changes must register here: refresh whenever the working-tree
+  // status map moves (it updates on every fs:change via the tree refresh).
+  const gitStatuses = useStore((s) => s.gitStatuses);
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [log, setLog] = useState<Commit[]>([]);
   const [message, setMessage] = useState('');
@@ -43,6 +46,19 @@ export function GitPanel() {
   useEffect(() => {
     void refresh(); /* eslint-disable-next-line */
   }, [workspaceId]);
+
+  // Live re-registration: any fs change flips gitStatuses → re-pull status
+  // + log so new edits appear without leaving the panel. Skips the very
+  // first run (the workspaceId effect already loaded).
+  const firstStatuses = React.useRef(true);
+  useEffect(() => {
+    if (firstStatuses.current) {
+      firstStatuses.current = false;
+      return;
+    }
+    void refresh();
+    /* eslint-disable-next-line */
+  }, [gitStatuses]);
 
   async function initRepo() {
     if (!workspaceId) return;

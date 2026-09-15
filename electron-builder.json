@@ -1,0 +1,49 @@
+{
+  "appId": "com.aether.ide",
+  "productName": "Aether",
+  "copyright": "Copyright © 2026 Aether",
+  "directories": {
+    "output": "release",
+    "buildResources": "build"
+  },
+  "files": [
+    "dist/**/*",
+    "dist-server/**/*",
+    "electron/dist/**/*",
+    "migrations/**/*",
+    "config/**/*",
+    "Aether-Skill-Pack/**/*",
+    "package.json"
+  ],
+  "extraResources": [],
+  "asar": false,
+  "npmRebuild": false,
+  "electronDist": "node_modules/electron/dist",
+  "afterPack": "scripts/afterPack.cjs",
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "build/icon.ico",
+    "artifactName": "Aether-Setup-${version}.${ext}",
+    "publisherName": "Aether",
+    "requestedExecutionLevel": "asInvoker"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowElevation": true,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Aether",
+    "uninstallDisplayName": "Aether ${version}",
+    "license": "build/license.txt",
+    "artifactName": "Aether-Setup-${version}.${ext}",
+    "deleteAppDataOnUninstall": false,
+    "include": "build/installer.nsh"
+  }
+}

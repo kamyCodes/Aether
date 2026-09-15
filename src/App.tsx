@@ -1,5 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Command, Settings, PanelLeft, PanelRight, PanelBottom, X } from 'lucide-react';
+import {
+  Command,
+  Settings,
+  PanelLeft,
+  PanelRight,
+  PanelBottom,
+  X,
+  Undo2,
+  Redo2,
+} from 'lucide-react';
 import { AetherMark } from './lib/AetherMark';
 import { useStore } from './lib/store';
 import { Sidebar } from './components/Sidebar';
@@ -23,8 +32,11 @@ import { Dialogs } from './components/Dialogs';
 import { Toasts } from './components/Toasts';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ReviewPanel } from './components/ReviewPanel';
+import { SetupWizard } from './components/SetupWizard';
 import { mountGlassInteractions } from './lib/glass';
 import type { OpenTab } from './lib/store';
+import { get } from './lib/api';
+import { APP_VERSION } from '../shared/version';
 
 export default function App() {
   const init = useStore((s) => s.init);
@@ -40,6 +52,51 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [rightWidth, setRightWidth] = useState(400);
+  // Panel minimums (single source of truth for both the resizer clamp and
+  // the escalation chain): sidebar 48 (icon rail), chat 260 (composer
+  // squeezes below that), so the editor is the last to lose space.
+  const SIDEBAR_MIN = 48;
+  const CHAT_MIN = 260;
+  // First-run setup wizard: shown while no setup marker exists (or recovery
+  // is pending) and the user hasn't explicitly deferred. Also re-openable
+  // from Settings via the aether:open-setup event (spec Section 3.3).
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [setupDeferred, setSetupDeferred] = useState(false);
+  const [versionMismatch, setVersionMismatch] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const s = await get<{ complete: boolean; recovery: unknown }>('/setup/state');
+        if (!s.complete || s.recovery) setSetupOpen(true);
+      } catch {
+        /* server offline — retry happens via WS status */
+      }
+    })();
+    const openSetup = () => {
+      setSetupDeferred(false);
+      setSetupOpen(true);
+    };
+    window.addEventListener('aether:open-setup', openSetup);
+    return () => window.removeEventListener('aether:open-setup', openSetup);
+  }, []);
+
+  // Frontend↔backend version handshake (spec Section 4.6): a cached tab
+  // against an updated backend must never operate silently mismatched.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const h = await get<{ version?: string }>('/health');
+        if (h.version && h.version !== APP_VERSION) {
+          setVersionMismatch(
+            `Frontend ${APP_VERSION} ↔ backend ${h.version} — reload the window (Ctrl+R) to pick up the matching bundle.`,
+          );
+        }
+      } catch {
+        /* offline; the connection dot already shows it */
+      }
+    })();
+  }, []);
 
   // Liquid Glass interaction layer (glow / shine / segmented indicator) —
   // delegated listeners mounted once; no component logic involved.
@@ -168,6 +225,40 @@ export default function App() {
           <AetherMark size={16} /> Aether
         </span>
         <span className="logo-tagline">Build with agents.</span>
+        <div className="hist-buttons">
+          <button
+            className="tb-icon-btn"
+            title="Undo (Ctrl+Z) — active editor or focused input"
+            aria-label="Undo"
+            onClick={() => {
+              const ed = (
+                window as unknown as {
+                  __aetherActiveEditor?: { trigger?: (src: string, act: string) => void };
+                }
+              ).__aetherActiveEditor;
+              if (ed?.trigger) ed.trigger('ui', 'undo');
+              else document.execCommand('undo');
+            }}
+          >
+            <Undo2 size={14} />
+          </button>
+          <button
+            className="tb-icon-btn"
+            title="Redo (Ctrl+Y) — active editor or focused input"
+            aria-label="Redo"
+            onClick={() => {
+              const ed = (
+                window as unknown as {
+                  __aetherActiveEditor?: { trigger?: (src: string, act: string) => void };
+                }
+              ).__aetherActiveEditor;
+              if (ed?.trigger) ed.trigger('ui', 'redo');
+              else document.execCommand('redo');
+            }}
+          >
+            <Redo2 size={14} />
+          </button>
+        </div>
         <div className="title-center">
           {/* Command-palette entry point: read-only input that opens the
               palette on focus/click; filtering lives in CommandPalette. */}
@@ -227,7 +318,10 @@ export default function App() {
             <div style={{ width: sidebarWidth }} className="panel sidebar">
               <Sidebar onOpenSettings={() => setSettingsOpen(true)} />
             </div>
-            <Resizer vertical onResize={setSidebarWidth} />
+            <Resizer
+              vertical
+              onResize={(d) => setSidebarWidth((w) => Math.min(480, Math.max(SIDEBAR_MIN, w + d)))}
+            />
           </>
         )}
 
@@ -258,7 +352,13 @@ export default function App() {
           </div>
           {showBottom && (
             <>
-              <Resizer horizontal reverse onResize={setBottomHeight} />
+              <Resizer
+                horizontal
+                reverse
+                onResize={(d) =>
+                  setBottomHeight((h) => Math.min(window.innerHeight - 220, Math.max(140, h + d)))
+                }
+              />
               <div style={{ height: bottomHeight }} className="panel">
                 <div className="panel-header">
                   {/* Liquid Glass: Radix ToggleGroup + layoutId indicator */}
@@ -286,7 +386,11 @@ export default function App() {
 
         {showRight && (
           <>
-            <Resizer vertical reverse onResize={setRightWidth} />
+            <Resizer
+              vertical
+              reverse
+              onResize={(d) => setRightWidth((w) => Math.min(640, Math.max(CHAT_MIN, w + d)))}
+            />
             <div style={{ width: rightWidth }} className="panel rightbar">
               <div className="panel-header">
                 {/* Single-segment header (no switching) — glass segmented keeps
@@ -325,6 +429,25 @@ export default function App() {
         />
       )}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {setupOpen && (
+        <SetupWizard
+          onDone={() => {
+            setSetupOpen(false);
+            setSetupDeferred(true);
+            void useStore.getState().refreshModels();
+            void useStore.getState().init();
+          }}
+        />
+      )}
+      {versionMismatch && !setupOpen && (
+        <div className="setup-banner warn" role="alert">
+          <span>{versionMismatch}</span>
+          <button onClick={() => location.reload()}>Reload</button>
+          <button onClick={() => setVersionMismatch(null)} aria-label="Dismiss">
+            <X size={11} />
+          </button>
+        </div>
+      )}
       <Dialogs />
       {/* Liquid Glass refraction filter — must exist EXACTLY ONCE in the app
           shell; the shared .glass class references it by id. Chromium only —

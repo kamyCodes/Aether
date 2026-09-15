@@ -195,6 +195,14 @@ export class AgentEngine {
     const t = this.tasks.get(taskId);
     if (!t) return;
     this.controllers.get(taskId)?.abort();
+    // Unblock an execute() parked on pause or plan approval so the aborted
+    // run actually settles instead of leaking a pending promise.
+    this.paused.delete(taskId);
+    const approval = this.planApprovals.get(taskId);
+    if (approval) {
+      this.planApprovals.delete(taskId);
+      approval(false, []);
+    }
     this.setStatus(taskId, 'cancelled');
     void this.closeDbSession(taskId, 'cancelled');
   }
@@ -529,7 +537,14 @@ export class AgentEngine {
       await this.execute(task, ctrl.signal);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg === 'Aborted by user') {
+      // "End task" aborts the in-flight model request, which surfaces as a
+      // generic AbortError ("This operation was aborted") — record it as
+      // cancelled, never as a failed run.
+      const aborted =
+        ctrl.signal.aborted ||
+        msg === 'Aborted by user' ||
+        /aborterror|operation was aborted/i.test(msg);
+      if (aborted) {
         this.setStatus(taskId, 'cancelled');
         void this.closeDbSession(taskId, 'cancelled');
       } else {

@@ -1,0 +1,13 @@
+Aether — AI Development Environment
+Copyright (c) 2026 Aether contributors
+
+Permission is granted to install and use this software on your machine.
+
+This software is provided "AS IS", WITHOUT WARRANTY OF ANY KIND, express or
+implied, including but not limited to the warranties of merchantability,
+fitness for a particular purpose and noninfringement. In no event shall the
+authors or copyright holders be liable for any claim, damages or other
+liability arising from the use of this software.
+
+Third-party components remain under their own licenses, included in the
+application directory.

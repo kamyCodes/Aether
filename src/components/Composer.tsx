@@ -58,7 +58,7 @@ function SkillSlashMenu({
 
 const AUTONOMY_LABELS: Record<string, string> = {
   secure: 'Secure — approve everything',
-  review: 'Review-driven — approve plan & commands',
+  review: 'Review — approve plan & commands',
   agent: 'Agent-driven — only destructive gated',
   custom: 'Custom rules',
 };

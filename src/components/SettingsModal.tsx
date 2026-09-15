@@ -182,6 +182,17 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               <GlassButton className="btn-glass glass" onClick={() => void refreshModels()}>
                 Test connection
               </GlassButton>
+              {/* Re-run the first-run wizard any time (spec Section 3.3) —
+                  never a one-time-only first-run artifact. */}
+              <GlassButton
+                className="btn-glass glass"
+                onClick={() => {
+                  onClose();
+                  window.dispatchEvent(new CustomEvent('aether:open-setup'));
+                }}
+              >
+                Run setup again…
+              </GlassButton>
             </div>
             <strong style={{ fontSize: 12 }}>Autonomy</strong>
             <div className="settings-row">

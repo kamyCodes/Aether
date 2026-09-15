@@ -28,10 +28,16 @@ export const OMNI_PORT = portEnv('OMNI_PORT', 20128);
 /** Bind host: loopback by default; set HOST=0.0.0.0 to expose on the LAN. */
 export const HOST = process.env.HOST ?? '127.0.0.1';
 
-/** Single Aether data directory. AETHER_HOME overrides (tests, sandboxing). */
+/** Single Aether data directory. AETHER_HOME overrides (tests, sandboxing,
+ *  portable installs). Platform default: %APPDATA%\Aether on Windows (the
+ *  installer-created per-user data location), ~/.aether elsewhere. The
+ *  install directory (Program Files / %LOCALAPPDATA%\Programs\Aether) is
+ *  NEVER used for data — updates replace it wholesale (spec Section 4.1). */
 export const DATA_DIR = process.env.AETHER_HOME
   ? path.resolve(process.env.AETHER_HOME)
-  : path.join(os.homedir(), '.aether');
+  : process.platform === 'win32' && process.env.APPDATA
+    ? path.join(process.env.APPDATA, 'Aether')
+    : path.join(os.homedir(), '.aether');
 
 // --- Derived bases (no other file may write a host/port literal) ---
 

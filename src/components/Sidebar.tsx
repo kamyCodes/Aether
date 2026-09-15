@@ -10,6 +10,7 @@ import {
   Pencil,
   Trash2,
   Copy,
+  X,
 } from 'lucide-react';
 import { TechIcon } from './TechIcon';
 import { GlassSegmentedControl, GlassButton } from './glass';
@@ -33,6 +34,7 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const workspaceId = useStore((s) => s.workspaceId);
   const addWorkspace = useStore((s) => s.addWorkspace);
   const selectWorkspace = useStore((s) => s.selectWorkspace);
+  const closeWorkspace = useStore((s) => s.closeWorkspace);
   const openTab = useStore((s) => s.openTab);
   const workspaceName = useStore((s) => s.workspaces.find((w) => w.id === s.workspaceId)?.name);
   const createFile = useStore((s) => s.createFile);
@@ -146,12 +148,33 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
                 className={`tree-item ${w.id === workspaceId ? 'active' : ''}`}
                 onClick={() => void selectWorkspace(w.id)}
               >
-                <Folder size={12} className="icon-run" /> {w.name}
+                <Folder size={12} className="icon-run" />
+                <span className="ws-name" title={w.root}>
+                  {w.name}
+                </span>
                 {w.git && (
-                  <span className="badge" style={{ marginLeft: 'auto' }}>
+                  <span className="badge" style={{ marginLeft: 'auto', flexShrink: 0 }}>
                     git
                   </span>
                 )}
+                <button
+                  className="ws-close"
+                  title={`Close workspace "${w.name}" (files on disk are untouched)`}
+                  aria-label={`Close workspace ${w.name}`}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const ok = await confirmDialog({
+                      title: `Close workspace "${w.name}"?`,
+                      message:
+                        'Aether stops watching this folder and removes it from the workspace list. Files on disk are not touched — reopen the folder any time.',
+                      confirmLabel: 'Close workspace',
+                      danger: true,
+                    });
+                    if (ok) await closeWorkspace(w.id);
+                  }}
+                >
+                  <X size={11} />
+                </button>
               </div>
             ))}
             <div style={{ padding: 10 }}>

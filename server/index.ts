@@ -13,6 +13,7 @@ import { WorkspaceManager } from './workspace.js';
 import { pickFolder } from './folderPicker.js';
 import { OmniClient } from './omni.js';
 import { detectMockGateway, enforceMockGuard, type MockGuardVerdict } from './mockGuard.js';
+import { getSetupHelp } from './setup.js';
 import { TerminalManager } from './terminal.js';
 import { GitManager, buildFileDiff } from './git.js';
 import { PermissionManager } from './permissions.js';
@@ -34,6 +35,8 @@ import { initDb, isDbReady } from './db.js';
 import * as store from './dbStore.js';
 import { dbRows } from './db.js';
 import { maskKey, resolveApiKey } from './omni.js';
+import { SetupManager, type SetupPayload } from './setup.js';
+import { APP_VERSION } from '../shared/version.js';
 import { pickModelForTask, CATEGORY_PREFERENCES } from './router.js';
 import { countTokens } from './tokens.js';
 import type { ChangeProposal, ChatMessage, FileDiff, ModelInfo } from '../shared/types.js';
@@ -144,7 +147,47 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const api = express.Router();
 
-api.get('/health', (_req, res) => res.json({ ok: true, version: '0.1.0' }));
+api.get('/health', (_req, res) => res.json({ ok: true, version: APP_VERSION }));
+
+// --- First-run setup wizard (blocks the UI until complete or deferred) ---
+const setup = new SetupManager(settings, omni);
+api.get('/setup/state', async (_req, res) => res.json(await setup.getState()));
+api.get('/setup/help', (_req, res) => res.json(getSetupHelp()));
+api.post('/setup/check/datadir', async (req, res) =>
+  res.json(await setup.checkDataDir(String((req.body as { dir?: string }).dir ?? ''))),
+);
+api.post('/setup/check/omni', async (req, res) => {
+  const { baseUrl, apiKey } = (req.body ?? {}) as { baseUrl?: string; apiKey?: string };
+  res.json(await setup.testOmni(String(baseUrl ?? ''), String(apiKey ?? '')));
+});
+api.post('/setup/check/database', async (req, res) =>
+  res.json(
+    await setup.testDatabase(
+      String((req.body as { connectionString?: string }).connectionString ?? ''),
+    ),
+  ),
+);
+api.post('/setup/check/workspacedir', async (req, res) =>
+  res.json(await setup.checkWorkspaceDir(String((req.body as { dir?: string }).dir ?? ''))),
+);
+api.post('/setup/complete', async (req, res) =>
+  res.json(await setup.complete(req.body as SetupPayload)),
+);
+api.post('/setup/recover/restore-backup', (_req, res) => res.json(setup.recoverRestoreBackup()));
+api.post('/setup/recover/reset', (req, res) =>
+  res.json(setup.recoverReset(Boolean((req.body as { keepBackups?: boolean }).keepBackups))),
+);
+api.post('/setup/recover/accept-defaults', (_req, res) => res.json(setup.recoverAcceptDefaults()));
+
+// --- Settings backups (Section 4.5: pre-change insurance, always wired) ---
+api.post('/settings/backup', (_req, res) => {
+  try {
+    res.json({ ok: true, path: settings.backupSettings() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+api.get('/settings/backups', (_req, res) => res.json({ backups: settings.listBackups() }));
 
 // --- OmniRoute ---
 // `/omni/status` serves the full live OmniRoute model catalog. It's called
@@ -176,15 +219,22 @@ async function refreshModels() {
 
 api.get('/settings', (_req, res) => res.json(settings.settings));
 api.put('/settings', (req, res) => {
-  settings.settings = {
-    omni: { ...settings.settings.omni, ...req.body.omni },
-    ui: { ...settings.settings.ui, ...req.body.ui },
-    agent: { autonomy: { ...settings.settings.agent.autonomy, ...req.body.agent?.autonomy } },
-  };
-  omni.settings = settings.settings.omni;
-  perms.autonomy = settings.settings.agent.autonomy;
-  settings.save();
-  res.json(settings.settings);
+  try {
+    settings.settings = {
+      omni: { ...settings.settings.omni, ...req.body.omni },
+      ui: { ...settings.settings.ui, ...req.body.ui },
+      agent: { autonomy: { ...settings.settings.agent.autonomy, ...req.body.agent?.autonomy } },
+    };
+    omni.settings = settings.settings.omni;
+    perms.autonomy = settings.settings.agent.autonomy;
+    settings.save();
+    res.json(settings.settings);
+  } catch (e) {
+    // Recovery-pending (corrupt/newer settings file) — surface as 409 so the
+    // UI can route the user into the recovery flow instead of silently
+    // pretending the save worked.
+    res.status(409).json({ error: e instanceof Error ? e.message : String(e) });
+  }
 });
 
 // --- Workspaces ---
@@ -688,11 +738,9 @@ api.get('/skills-pack/manifest', async (_req, res) => {
     const raw = await fsp.readFile(join(SKILL_PACK_ROOT, 'skills-manifest.json'), 'utf8');
     res.type('json').send(raw);
   } catch {
-    res
-      .status(404)
-      .json({
-        error: 'skills-manifest.json not found — run: node scripts/generate-skills-manifest.mjs',
-      });
+    res.status(404).json({
+      error: 'skills-manifest.json not found — run: node scripts/generate-skills-manifest.mjs',
+    });
   }
 });
 api.get('/skills-pack/file', async (req, res) => {

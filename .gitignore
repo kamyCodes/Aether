@@ -10,6 +10,10 @@ node_modules/
 dist/
 dist-server/
 
+# Electron packaging output (release artifacts live in GitHub Releases)
+release/
+electron/dist/
+
 # Dev/preview artifacts
 .freebuff/*.log
 .freebuff/*.log.err

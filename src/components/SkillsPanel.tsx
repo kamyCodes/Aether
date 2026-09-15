@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Check,
   Circle,
@@ -26,6 +27,16 @@ export function SkillsPanel() {
   const [category, setCategory] = useState('all');
   const [importing, setImporting] = useState(false);
   const [importNote, setImportNote] = useState('');
+
+  /** Click on the dimmed backdrop (not the dialog) closes the editor — same
+   *  dismiss affordance as SettingsModal. Skips dismissal while a text field
+   *  holds a selection, so highlight-drag on the backdrop never wipes work. */
+  const onOverlayClose = (e: React.MouseEvent) => {
+    if (e.target !== e.currentTarget) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
+    setEditing(null);
+  };
 
   // Categories from pack provenance + a synthetic bucket for unpackaged skills.
   const categories = useMemo(() => {
@@ -97,12 +108,11 @@ export function SkillsPanel() {
   };
 
   return (
-    <div className="panel-body" style={{ display: 'flex' }}>
+    <div className="panel-body" style={{ display: 'flex', flexDirection: 'column' }}>
       <div
         style={{
           flex: 1,
           minWidth: 0,
-          borderRight: '1px solid var(--border)',
           display: 'flex',
           flexDirection: 'column',
         }}
@@ -239,17 +249,31 @@ export function SkillsPanel() {
         </div>
       </div>
 
-      {editing && (
-        <SkillEditor
-          skill={editing}
-          onChange={setEditing}
-          onSave={async () => {
-            await saveSkill(editing);
-            setEditing(null);
-          }}
-          onClose={() => setEditing(null)}
-        />
-      )}
+      {editing &&
+        createPortal(
+          /* Portal to <body>: the editor must float over the whole window.
+             Rendered in place, the enclosing .panel's backdrop-filter makes
+             it a containing block, so position:fixed pins the overlay to the
+             panel box (and clips it) instead of covering the viewport. */
+          <div className="modal-overlay" onMouseDown={onOverlayClose}>
+            <div
+              className="modal skill-editor"
+              style={{ width: 640 }}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <SkillEditor
+                skill={editing}
+                onChange={setEditing}
+                onSave={async () => {
+                  await saveSkill(editing);
+                  setEditing(null);
+                }}
+                onClose={() => setEditing(null)}
+              />
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -268,7 +292,7 @@ function SkillEditor({
   const set = (patch: Partial<Skill>) => onChange({ ...skill, ...patch });
   const isNew = !skill.id;
   return (
-    <div className="skill-editor">
+    <>
       <div className="skill-editor-head">
         <strong>{isNew ? 'New Skill' : `Edit — ${skill.name}`}</strong>
         <button className="skill-editor-close" onClick={onClose} title="Close">
@@ -356,6 +380,6 @@ function SkillEditor({
           {isNew ? 'Create Skill' : 'Save Changes'}
         </button>
       </div>
-    </div>
+    </>
   );
 }

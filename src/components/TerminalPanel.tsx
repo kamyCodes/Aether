@@ -403,7 +403,13 @@ export function TerminalPanel() {
   }
 
   function createTerm() {
-    if (cwd) wsSend('term:create', { cwd });
+    // No workspace: tell the user instead of spawning a stale shell that
+    // sits in some arbitrary directory (or silently failing to spawn).
+    if (!cwd) {
+      useStore.getState().showToast('Open a workspace folder first — then a terminal can start there.');
+      return;
+    }
+    wsSend('term:create', { cwd });
   }
   function killTerm(id: string, e: React.MouseEvent) {
     e.stopPropagation();
@@ -432,7 +438,11 @@ export function TerminalPanel() {
       return;
     }
     // No terminal yet: create one, then run once it shows up.
-    if (cwd) {
+    if (!cwd) {
+      useStore.getState().showToast('Open a workspace folder first — then commands have somewhere to run.');
+      return;
+    }
+    {
       const onCreated = (ev: MessageEvent) => {
         try {
           const { type, payload } = JSON.parse(ev.data);
@@ -527,7 +537,19 @@ export function TerminalPanel() {
         <div ref={containerRef} className="terminal-container" />
         {terms.length === 0 && (
           <div className="term-idle">
-            {suggestions.length > 0 ? (
+            {!workspaceId ? (
+              <>
+                <span className="term-idle-caption">No workspace open</span>
+                <span className="term-idle-hint" onClick={() => {
+                  const btn = [...document.querySelectorAll('button')].find(
+                    (b) => b.textContent?.trim() === '+ Add Workspace Folder',
+                  );
+                  btn?.click();
+                }}>
+                  Open a folder first — terminals start in your workspace
+                </span>
+              </>
+            ) : suggestions.length > 0 ? (
               <>
                 <span className="term-idle-caption">Run in this project</span>
                 {suggestions.map((s) => (

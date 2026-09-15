@@ -142,7 +142,9 @@ export function WelcomeScreen({ onOpenPalette }: { onOpenPalette: () => void }) 
                 key={card.id}
                 className="welcome-card"
                 disabled={!current && card.id !== 'add-folder'}
-                onClick={() => current !== undefined && void runCard(card)}
+                onClick={() =>
+                  (current !== undefined || card.id === 'add-folder') && void runCard(card)
+                }
                 title={card.prompt || 'Open a folder'}
               >
                 <span className="welcome-card-icon">

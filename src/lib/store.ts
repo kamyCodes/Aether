@@ -163,6 +163,7 @@ interface AppState {
   loadWorkspaces: () => Promise<void>;
   addWorkspace: (root: string) => Promise<void>;
   selectWorkspace: (id: string) => Promise<void>;
+  closeWorkspace: (id: string) => Promise<void>;
   refreshTree: () => Promise<void>;
   openFile: (path: string, preview?: boolean) => Promise<void>;
   openTab: (tab: Omit<OpenTab, 'id'> & { id?: string }) => void;
@@ -458,6 +459,24 @@ export const useStore = create<AppState>((setState, getState) => ({
     const ws2 = await post<WorkspaceInfo>('/workspaces', { root });
     setState({ workspaces: [...getState().workspaces, ws2] });
     await getState().selectWorkspace(ws2.id);
+  },
+
+  // Stop watching a folder and drop it from the registry. Files on disk are
+  // never touched; only the session's association with the folder ends.
+  closeWorkspace: async (id) => {
+    await del(`/workspaces/${id}`);
+    const st = getState();
+    const rest = st.workspaces.filter((w) => w.id !== id);
+    setState({
+      workspaces: rest,
+      workspaceId: null,
+      tree: null,
+      tabs: [],
+      activeTabId: null,
+      gitStatuses: {},
+      gitBranch: '',
+    });
+    if (rest.length) await getState().selectWorkspace(rest[0].id);
   },
 
   selectWorkspace: async (id) => {

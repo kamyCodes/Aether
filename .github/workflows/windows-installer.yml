@@ -1,0 +1,97 @@
+name: windows-installer
+
+# Builds the NSIS installer on every version tag (v*), smoke-tests the
+# packaged app on the runner, uploads the installer as a workflow artifact,
+# and attaches it to a GitHub Release.
+#
+# workflow_dispatch lets the pipeline be exercised from the Actions tab
+# without cutting a tag; the release step is skipped in that case.
+#
+# Builds are UNSIGNED by design — see docs/windows-installer.md (code-signing
+# plan). To enable signing later, add CSC_LINK / CSC_KEY_PASSWORD as repo
+# secrets; electron-builder picks them up automatically (steps unchanged).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write # required to create the GitHub Release
+
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Electron's postinstall downloads a ~120 MB binary every run; cache it.
+      - uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\electron\Cache
+          key: electron-cache-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - run: npm ci
+
+      # A tag must match the packaged version or the artifact name lies —
+      # verify package.json AND shared/version.ts (frontend↔backend handshake
+      # version, spec Section 4.6) agree with the tag before building.
+      - name: Verify tag matches package.json + shared/version.ts
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $pkg = (Get-Content package.json | ConvertFrom-Json).version
+          $m = Select-String -Path shared/version.ts -Pattern "APP_VERSION = '([^']+)'"
+          $app = $m.Matches[0].Groups[1].Value
+          $tag = "${{ github.ref_name }}".TrimStart('v')
+          if ($tag -ne $pkg -or $tag -ne $app) {
+            Write-Error "tag ${{ github.ref_name }} does not match package.json ($pkg) / shared/version.ts ($app) — bump all three, then re-tag."
+            exit 1
+          }
+
+      # Same gates the audit-gate workflow enforces on branches — a tag must
+      # never package code that fails them.
+      - name: Typecheck + CSS lint
+        run: npm run typecheck
+      - name: Tests
+        run: npm test
+
+      - name: Build installer
+        run: npm run package:win
+
+      - name: Smoke test the packaged build
+        run: node scripts/smoke-packaged.mjs
+        timeout-minutes: 5
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aether-Setup-${{ github.ref_name }}
+          if-no-files-found: error
+          path: |
+            release/Aether-Setup-*.exe
+            release/Aether-Setup-*.exe.blockmap
+            release/latest.yml
+
+      # Attached to the Release on tag pushes only (workflow_dispatch has no
+      # tag). The .blockmap ships alongside the exe so future delta updates
+      # only download changed blocks; latest.yml is for auto-update feeds.
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/Aether-Setup-*.exe
+            release/Aether-Setup-*.exe.blockmap
+            release/latest.yml
+          generate_release_notes: true

@@ -48,8 +48,20 @@ export function StatusBar() {
             : `AI endpoint unreachable${omniError ? `: ${omniError.slice(0, 80)}` : ''}`
         }
       >
-        <span className={`conn-dot ${omniConnected ? 'ok' : 'bad'}`} /> Aether{' '}
-        {omniConnected ? 'connected' : 'offline'}
+        {/* Connection state uses ONLY fixed semantic colors: green =
+            connected, red = offline, yellow (pulsing) = connecting —
+            never the accent. */}
+        <span
+          className={`conn-dot ${
+            omniConnected ? 'ok' : wsStatus === 'connecting' ? 'connecting' : 'bad'
+          }`}
+        />{' '}
+        Aether{' '}
+        {omniConnected
+          ? 'connected'
+          : wsStatus === 'connecting'
+            ? 'connecting…'
+            : 'offline'}
       </span>
       <span className="status-sep">·</span>
       <span className="status-item" title={`WebSocket to the local server: ${wsStatus}`}>
