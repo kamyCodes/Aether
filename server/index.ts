@@ -23,6 +23,7 @@ import { ContextManager } from './context.js';
 import { CheckpointManager } from './checkpoints.js';
 import { MemoryManager } from './memory.js';
 import { HistoryStore } from './history.js';
+import { ChatSessionStore, type PersistedWorkspaceChats } from './chats.js';
 import { HealthMonitor } from './healthCheck.js';
 import { ToolRegistry } from './tools.js';
 import { AgentEngine } from './agent.js';
@@ -55,7 +56,9 @@ const ctx = new ContextManager();
 const cps = new CheckpointManager(DATA_DIR);
 const memory = new MemoryManager();
 const history = new HistoryStore();
+const chats = new ChatSessionStore();
 const health = new HealthMonitor(omni, () => settings.settings.omni);
+health.onUpdate = () => broadcast('health:models', health.snapshot());
 health.start();
 const tools = new ToolRegistry(workspaces, perms, gitm, terms, cps, indexer, memory);
 const agent = new AgentEngine(
@@ -71,11 +74,20 @@ const agent = new AgentEngine(
 );
 agent.health = health;
 
-// Restore persisted task history so the panel survives restarts & refreshes.
-void history.list(undefined, 50).then((persisted) => {
-  for (const p of persisted) agent.restorePersisted(p);
-  if (persisted.length) console.log(`Restored ${persisted.length} persisted task(s) from history`);
-});
+// Mark any task left non-terminal on disk as failed BEFORE restoring, so no
+// client can ever observe (or inherit) a running ghost from a previous run —
+// the agent engine's in-memory repair alone leaves the disk stale.
+void history
+  .failInterrupted()
+  .then((repaired) => {
+    if (repaired > 0)
+      console.log(`[startup] marked ${repaired} interrupted task(s) as failed (restart recovery)`);
+  })
+  .then(() => history.list(undefined, 50))
+  .then((persisted) => {
+    for (const p of persisted) agent.restorePersisted(p);
+    if (persisted.length) console.log(`Restored ${persisted.length} persisted task(s) from history`);
+  });
 // Re-open previously registered workspaces (registry persisted to ~/.aether/workspaces.json).
 void workspaces.restoreRegistry().then((count) => {
   if (count > 0) console.log(`Restored ${count} workspace(s) from registry`);
@@ -179,6 +191,32 @@ api.post('/setup/recover/reset', (req, res) =>
 );
 api.post('/setup/recover/accept-defaults', (_req, res) => res.json(setup.recoverAcceptDefaults()));
 
+// --- Persisted chat threads (server/chats.ts) — per-workspace session
+// state survives an app restart. The client mirrors its threads here. ---
+api.get('/workspaces/:id/chats', async (req, res) => {
+  res.json((await chats.get(req.params.id)) ?? { sessions: [] });
+});
+api.put('/workspaces/:id/chats', (req, res) => {
+  const body = req.body as Partial<PersistedWorkspaceChats> | undefined;
+  if (!body || !Array.isArray(body.sessions)) {
+    res.status(400).json({ error: 'sessions[] required' });
+    return;
+  }
+  chats.save({
+    workspaceId: req.params.id,
+    savedAt: Date.now(),
+    activeChatId: typeof body.activeChatId === 'string' ? body.activeChatId : null,
+    chatTaskId: typeof body.chatTaskId === 'string' ? body.chatTaskId : null,
+    activeTaskId: typeof body.activeTaskId === 'string' ? body.activeTaskId : null,
+    sessions: body.sessions as PersistedWorkspaceChats['sessions'],
+  });
+  res.json({ ok: true });
+});
+api.delete('/workspaces/:id/chats', async (req, res) => {
+  await chats.delete(req.params.id);
+  res.json({ ok: true });
+});
+
 // --- Settings backups (Section 4.5: pre-change insurance, always wired) ---
 api.post('/settings/backup', (_req, res) => {
   try {
@@ -254,6 +292,15 @@ api.get('/workspaces', (_req, res) => res.json(workspaces.list()));
 
 api.delete('/workspaces/:id', (req, res) => {
   workspaces.removeWorkspace(req.params.id);
+  // The workspace's session ends: its terminals go with it (shells spawned
+  // in a folder that's no longer open have no reason to keep running), and
+  // its persisted chat threads are dropped from disk too.
+  for (const s of terms.listForWorkspace(req.params.id)) {
+    terms.kill(s.id);
+    broadcast('term:closed', { id: s.id });
+  }
+  terms.persistTabs();
+  void chats.delete(req.params.id);
   res.json({ ok: true });
 });
 
@@ -640,28 +687,58 @@ api.post('/chat', async (req, res) => {
     return;
   }
   try {
-    const result = await omni.chatStream(
-      { model: chatModel, messages: [{ role: 'system', content: sys }, ...messages] },
-      {
-        onDelta: (d) => send({ type: 'delta', delta: d }),
-        onUsage: (u) => {
-          if (u) {
-            settings.recordUsage(u.model, u.inputTokens, u.outputTokens);
-            bus.emit('usage', {
-              model: u.model,
-              inputTokens: u.inputTokens,
-              outputTokens: u.outputTokens,
-              kind: 'chat',
-              ts: Date.now(),
-            });
-          }
-        },
+    const handlers = {
+      onDelta: (d: string) => send({ type: 'delta', delta: d }),
+      onUsage: (u: { model: string; inputTokens: number; outputTokens: number } | null) => {
+        if (u) {
+          settings.recordUsage(u.model, u.inputTokens, u.outputTokens);
+          bus.emit('usage', {
+            model: u.model,
+            inputTokens: u.inputTokens,
+            outputTokens: u.outputTokens,
+            kind: 'chat' as const,
+            ts: Date.now(),
+          });
+        }
       },
-    );
-    if (result.resolvedModel && result.resolvedModel !== chatModel) {
-      send({ type: 'model', model: result.resolvedModel });
+    };
+    // Stale-catalog guard: the gateway's /models cache can list models the
+    // upstream no longer serves (a 404 like "model not found"). Rather than
+    // failing the whole chat on a dead catalog entry, walk down the catalog
+    // to the first model that actually answers.
+    const candidates = [
+      chatModel,
+      ...omni._modelCatalog.map((m) => m.id).filter((id) => id && id !== chatModel),
+    ];
+    let lastErr: unknown;
+    for (const candidate of candidates) {
+      try {
+        const result = await omni.chatStream(
+          { model: candidate, messages: [{ role: 'system', content: sys }, ...messages] },
+          handlers,
+        );
+        if (result.resolvedModel && result.resolvedModel !== candidate) {
+          send({ type: 'model', model: result.resolvedModel });
+        }
+        send({ type: 'done', text: result.text });
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+        const msg = err instanceof Error ? err.message : String(err);
+        // Only catalog-shape failures justify trying the next model: the
+        // request reached the gateway but the model itself is dead. Gateway-
+        // wide outages (5xx on every route) would just burn attempts.
+        const modelDead =
+          /\b40[034]\b/.test(msg) ||
+          /no endpoints|not found|no allowed providers|unsupported/i.test(msg);
+        if (!modelDead) throw err;
+        // Any tokens already streamed from a half-failed attempt would
+        // duplicate under the next model — tell the client to reset.
+        send({ type: 'reset' });
+      }
     }
-    send({ type: 'done', text: result.text });
+    if (lastErr) throw lastErr;
   } catch (err) {
     settings.recordError();
     send({ type: 'error', error: err instanceof Error ? err.message : String(err) });
@@ -805,8 +882,8 @@ api.post('/proposals/:id/reject', (req, res) =>
 
 // --- Terminal ---
 api.post('/terminals', (req, res) => {
-  const { cwd } = req.body as { cwd?: string };
-  const s = terms.create(cwd ?? os.homedir());
+  const { cwd, workspaceId } = req.body as { cwd?: string; workspaceId?: string };
+  const s = terms.create(cwd ?? os.homedir(), undefined, workspaceId);
   res.json({ id: s.id, title: s.title, cwd: s.cwd });
 });
 
@@ -866,12 +943,42 @@ api.get('/workspaces/:id/terminal-suggestions', async (req, res) => {
   }
   res.json({ suggestions });
 });
-api.get('/terminals', (_req, res) =>
-  res.json([...terms.sessions.values()].map(({ id, title, cwd }) => ({ id, title, cwd }))),
-);
+api.get('/terminals', (req, res) => {
+  // Optional ?workspaceId= filter — the terminal panel lists only the
+  // sessions belonging to the workspace currently on screen.
+  const wsId = typeof req.query.workspaceId === 'string' ? req.query.workspaceId : undefined;
+  const all = wsId ? terms.listForWorkspace(wsId) : [...terms.sessions.values()];
+  res.json(
+    all.map(({ id, title, cwd, workspaceId, integrated }) => ({
+      id,
+      title,
+      cwd,
+      workspaceId,
+      integrated,
+    })),
+  );
+});
 api.delete('/terminals/:id', (req, res) => {
   terms.kill(req.params.id);
+  broadcast('term:closed', { id: req.params.id });
   res.json({ ok: true });
+});
+// Tab metadata recorded by the previous backend run — the client re-creates
+// these tabs after an app restart (shells themselves are respawned fresh).
+api.get('/terminals/persisted', (_req, res) => {
+  res.json({ tabs: terms.loadPersistedTabs() });
+});
+// Client confirms which persisted tabs it revived (or dismissed): rewrite the
+// stash so a later restart reflects what the user actually kept. The server
+// additionally intersects with its LIVE sessions — a stale client must never
+// keep dead metadata alive in the stash.
+api.post('/terminals/persisted/ack', async (req, res) => {
+  const { revived } = (req.body ?? {}) as { revived?: string[] };
+  const liveIds = new Set(terms.sessions.keys());
+  const all = terms.loadPersistedTabs();
+  const keep = all.filter((t) => (revived ?? []).includes(t.id) && liveIds.has(t.id));
+  await terms.replaceDeadTabs(keep);
+  res.json({ ok: true, kept: keep.length });
 });
 
 // --- Preview ---
@@ -1028,7 +1135,93 @@ api.get('/db/usage', async (_req, res) => res.json(await store.getUsageByModel()
 
 api.get('/db/projects/:id/timeline', async (req, res) =>
   res.json(await store.getCommitTimeline(Number(req.params.id))),
-); // --- Uploads (attachments saved into .aether-uploads in workspace) ---
+);
+
+// --- Selective data wipe (uninstall helper) ---
+// POST /api/data/wipe — selectively removes user data categories.
+// Body: { keep: string[] } — categories to KEEP; everything else is wiped.
+// Available categories: settings, skills, checkpoints, permissions, memory,
+//   history, health, workspaces, analytics, chat-threads.
+api.post('/data/wipe', (req, res) => {
+  const body = (req.body ?? {}) as { keep?: string[] };
+  const keep = new Set(body.keep ?? []);
+  const ALL_CATEGORIES = [
+    'settings', 'skills', 'checkpoints', 'permissions',
+    'memory', 'history', 'health', 'workspaces', 'analytics', 'chat-threads',
+  ];
+  const removed: string[] = [];
+  const errors: string[] = [];
+
+  function rimrafSync(dir: string) {
+    try {
+      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+    } catch (e) {
+      errors.push(`${path.basename(dir)}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  function unlinkSync(file: string) {
+    try {
+      if (fs.existsSync(file)) fs.unlinkSync(file);
+    } catch (e) {
+      errors.push(`${path.basename(file)}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  for (const cat of ALL_CATEGORIES) {
+    if (keep.has(cat)) continue;
+    switch (cat) {
+      case 'settings':
+        unlinkSync(path.join(DATA_DIR, 'settings.json'));
+        removed.push('settings.json');
+        break;
+      case 'skills':
+        rimrafSync(path.join(DATA_DIR, 'skills'));
+        removed.push('skills/');
+        break;
+      case 'checkpoints':
+        rimrafSync(path.join(DATA_DIR, 'checkpoints'));
+        removed.push('checkpoints/');
+        break;
+      case 'permissions':
+        unlinkSync(path.join(DATA_DIR, 'permissions.json'));
+        removed.push('permissions.json');
+        break;
+      case 'memory':
+        rimrafSync(path.join(DATA_DIR, 'memory'));
+        removed.push('memory/');
+        break;
+      case 'history':
+        rimrafSync(path.join(DATA_DIR, 'history'));
+        removed.push('history/');
+        break;
+      case 'health':
+        unlinkSync(path.join(DATA_DIR, 'health.json'));
+        removed.push('health.json');
+        break;
+      case 'workspaces':
+        unlinkSync(path.join(DATA_DIR, 'workspaces.json'));
+        removed.push('workspaces.json');
+        break;
+      case 'analytics':
+        unlinkSync(path.join(DATA_DIR, 'analytics.json'));
+        removed.push('analytics.json');
+        break;
+      case 'chat-threads': {
+        const chatsDir = path.join(DATA_DIR, 'chats');
+        if (fs.existsSync(chatsDir)) {
+          rimrafSync(chatsDir);
+          removed.push('chats/');
+        }
+        break;
+      }
+    }
+  }
+
+  res.json({ removed, errors, dataDir: DATA_DIR });
+});
+
+// --- Uploads (attachments saved into .aether-uploads in workspace) ---
 api.post('/workspaces/:id/upload', upload.array('files'), async (req, res) => {
   try {
     const files = (req.files ?? []) as Express.Multer.File[];
@@ -1136,14 +1329,23 @@ wss.on('connection', (sock) => {
       return;
     }
     if (msg.type === 'term:create') {
-      const s = terms.create(String(msg.payload.cwd ?? os.homedir()));
+      // workspaceId scopes the session to the workspace that opened it —
+      // switching projects shows only that project's terminals.
+      const wsId = msg.payload.workspaceId ? String(msg.payload.workspaceId) : undefined;
+      const s = terms.create(
+        String(msg.payload.cwd ?? os.homedir()),
+        undefined,
+        wsId,
+      );
       const handler = (d: string) =>
         sock.send(JSON.stringify({ type: 'term:data', payload: { id: s.id, data: d } }));
       const onCmd = (c: unknown) =>
         sock.send(JSON.stringify({ type: 'term:command', payload: { id: s.id, command: c } }));
       const onCwd = (cwd: string) => {
         s.currentCwd = cwd;
+        s.cwd = cwd; // keep the persisted tab metadata on the shell's location
         s.title = `${cwd.split(/[\\/]/).pop() || cwd}`; // tab follows the cwd
+        terms.persistTabs();
         sock.send(JSON.stringify({ type: 'term:cwd', payload: { id: s.id, cwd, title: s.title } }));
       };
       s.emitter.on('data', handler);
@@ -1153,18 +1355,43 @@ wss.on('connection', (sock) => {
       sock.send(
         JSON.stringify({
           type: 'term:created',
-          payload: { id: s.id, title: s.title, cwd: s.cwd, integrated: s.integrated },
+          payload: {
+            id: s.id,
+            title: s.title,
+            cwd: s.cwd,
+            integrated: s.integrated,
+            workspaceId: s.workspaceId,
+          },
         }),
       );
+      // Reconnect/refresh: replay the existing scrollback so a terminal
+      // opened before this socket connected isn't a blank tab.
+      if (s.scrollback)
+        sock.send(
+          JSON.stringify({ type: 'term:data', payload: { id: s.id, data: s.scrollback } }),
+        );
     } else if (msg.type === 'term:input') {
       const { id, data } = msg.payload as { id: string; data: string };
       terms.sessions.get(id)?.write(data);
+    } else if (msg.type === 'term:replay') {
+      // Client re-mounted a terminal (page reload, panel re-open) after the
+      // scrollback replay already fired: send the current tail again.
+      const { id } = msg.payload as { id: string };
+      const s = terms.sessions.get(id);
+      if (s?.scrollback)
+        sock.send(JSON.stringify({ type: 'term:replay', payload: { id, data: s.scrollback } }));
     } else if (msg.type === 'term:resize') {
       const { id, cols, rows } = msg.payload as { id: string; cols: number; rows: number };
       terms.sessions.get(id)?.resize(cols, rows);
     } else if (msg.type === 'term:kill') {
       const { id } = msg.payload as { id: string };
       terms.kill(id);
+      // Closing a tab must also drop it from the persisted-tab stash —
+      // otherwise a metadata-only tab (session already gone) resurrects on
+      // the next restart even though the user explicitly closed it.
+      const stash = terms.loadPersistedTabs().filter((t) => t.id !== id);
+      void terms.replaceDeadTabs(stash);
+      broadcast('term:closed', { id });
     }
   });
   sock.on('close', () => {

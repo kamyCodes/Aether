@@ -94,6 +94,11 @@ async function startBackend(): Promise<void> {
 }
 
 function createWindow(): void {
+  // Explicit window/taskbar icon — in dev the process is electron.exe and
+  // shows the generic Electron glyph unless one is set here. In packaged
+  // builds the installer embeds build/icon.ico into the exe, so this is a
+  // no-op fallback (guarded: build/ ships only with the repo).
+  const iconPath = path.join(APP_ROOT, 'build', 'icon.ico');
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -101,6 +106,7 @@ function createWindow(): void {
     minHeight: 600,
     backgroundColor: '#0b0d14',
     title: 'Aether',
+    ...(fs.existsSync(iconPath) ? { icon: iconPath } : {}),
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,

@@ -730,9 +730,15 @@ function Bubble({ m, streamText, live }: { m: ChatMessage; streamText?: string; 
     /* Liquid Glass: entrance motion via ChatBubble — explicit initial/animate
        only, deliberately NO `layout` prop (too expensive on long scrolling
        lists) and no per-bubble glow (mousemove cost per row in a dense feed). */
-    <ChatBubble className={`ac-msg ${m.role} ${m.error ? 'error' : ''}`}>
+    <ChatBubble className={`ac-msg ${m.role} ${m.error ? 'error' : ''} ${m.pending ? 'streaming' : ''}`}>
       <div className="ac-bubble">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{typed || (m.pending ? '…' : '')}</ReactMarkdown>
+        {/* Live messages reveal via the typewriter (streamText); everything
+            else — finalized, restored history, chat-mode replies — renders
+            the message's own content. Rendering `typed` unconditionally made
+            every non-streaming bubble an empty pill. */}
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          {(live ? typed : m.content) || (m.pending ? '…' : '')}
+        </ReactMarkdown>
         {m.pending && (
           <span
             className={`ac-typing ${typed ? 'typing-line' : ''}`}
@@ -754,12 +760,17 @@ function Bubble({ m, streamText, live }: { m: ChatMessage; streamText?: string; 
 }
 
 export function AgentChat() {
+  const workspaceId = useStore((s) => s.workspaceId);
   const sessions = useStore((s) => s.chatSessions);
   const activeChatId = useStore((s) => s.activeChatId);
   const newChat = useStore((s) => s.newChat);
   const selectChat = useStore((s) => s.selectChat);
   const tasks = useStore((s) => s.tasks);
-  const activeTaskId = useStore((s) => s.activeTaskId);
+  // Per-workspace task selection: each project session remembers its own
+  // selected/last task — no global binding that leaks across workspaces.
+  const activeTaskId = useStore((s) =>
+    s.workspaceId ? s.activeTaskByWs[s.workspaceId] : undefined,
+  );
   const selectTask = useStore((s) => s.selectTask);
   const taskAction = useStore((s) => s.taskAction);
   const activity = useStore((s) => s.activity);
@@ -775,20 +786,46 @@ export function AgentChat() {
   const [showSessions, setShowSessions] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const session = sessions.find((s) => s.id === activeChatId);
+  // This workspace's own threads — the session list, and the thread the panel
+  // shows, never include another project's conversation.
+  const wsSessions = useMemo(
+    () => sessions.filter((s) => s.workspaceId === workspaceId),
+    [sessions, workspaceId],
+  );
+  const session = wsSessions.find((s) => s.id === activeChatId);
   const chatMessages = session?.messages ?? [];
 
+  // Inline prompts are workspace-scoped too: a permission/question/proposal
+  // raised by a run in another project must not render here. Items are
+  // matched through their task's workspace; untagged (rare, manual) items
+  // stay visible.
+  const wsOfTask = (tid?: string) => (tid ? tasks.find((t) => t.id === tid)?.workspaceId : undefined);
+  const inWorkspace = (tid?: string) => !tid || wsOfTask(tid) === workspaceId;
+  const wsPermissions = useMemo(
+    () => permissions.filter((p) => inWorkspace(p.taskId)),
+    [permissions, tasks, workspaceId],
+  );
+  const wsQuestions = useMemo(
+    () => questions.filter((q) => inWorkspace(q.taskId)),
+    [questions, tasks, workspaceId],
+  );
+  const wsProposals = useMemo(
+    () => proposals.filter((p) => inWorkspace(p.taskId)),
+    [proposals, tasks, workspaceId],
+  );
+
   // Running/paused tasks drive the pinned task header + live tool stream.
-  // Bound to THIS chat: the explicitly selected task, the task this thread
-  // spawned (chatTaskId), or a task whose bubbles live in this session —
-  // never a global fallback that would leak another thread's run into a
-  // fresh chat panel.
-  const chatTaskId = useStore((s) => s.chatTaskId);
+  // Bound to THIS workspace and THIS chat: the explicitly selected task, the
+  // task this thread spawned (chatTaskByWs), or a task whose bubbles live in
+  // this session — never a global fallback that would leak another
+  // workspace's run into this panel.
+  const chatTaskId = useStore((s) => (s.workspaceId ? s.chatTaskByWs[s.workspaceId] : undefined));
   const liveTask =
-    tasks.find((t) => t.id === activeTaskId) ??
+    (activeTaskId ? tasks.find((t) => t.id === activeTaskId) : undefined) ??
     (chatTaskId ? tasks.find((t) => t.id === chatTaskId) : undefined) ??
     tasks.find(
       (t) =>
+        t.workspaceId === workspaceId &&
         (t.status === 'running' || t.status === 'planning' || t.status === 'awaiting_permission') &&
         chatMessages.some((m) => m.taskId === t.id),
     );
@@ -806,7 +843,7 @@ export function AgentChat() {
   }, [liveTask, activity]);
 
   const streamText = liveTask ? agentStream[liveTask.id] : undefined;
-  const task = liveTask ?? tasks.find((x) => x.id === activeTaskId) ?? null;
+  const task = liveTask ?? (activeTaskId ? tasks.find((x) => x.id === activeTaskId) : undefined) ?? null;
   // Older persisted tasks predate the artifacts — normalize defensively.
   const steps = task?.steps ?? [];
   const diffs = task?.diffs ?? [];
@@ -839,8 +876,9 @@ export function AgentChat() {
   const actionsPhase = useRunLifecycle(runLive);
   const diffsPhase = useRunLifecycle(runLive);
 
-  // Stale-proposal hygiene: only pending proposals younger than 30 minutes.
-  const freshProposals = proposals.filter(
+  // Stale-proposal hygiene: only pending proposals younger than 30 minutes,
+  // and only ones belonging to this workspace's runs.
+  const freshProposals = wsProposals.filter(
     (p) => p.status === 'pending' && Date.now() - p.createdAt < 30 * 60 * 1000,
   );
 
@@ -867,8 +905,8 @@ export function AgentChat() {
   const empty =
     chatMessages.length === 0 &&
     timeline.length === 0 &&
-    permissions.length === 0 &&
-    questions.length === 0 &&
+    wsPermissions.length === 0 &&
+    wsQuestions.length === 0 &&
     freshProposals.length === 0;
 
   return (
@@ -935,12 +973,12 @@ export function AgentChat() {
 
       {showSessions && (
         <div className="ac-sessions">
-          {sessions.length === 0 && (
+          {wsSessions.length === 0 && (
             <div className="ac-note" style={{ padding: '4px 10px' }}>
               No sessions yet
             </div>
           )}
-          {sessions.map((s) => (
+          {wsSessions.map((s) => (
             <div
               key={s.id}
               className={`ac-session ${s.id === activeChatId ? 'active' : ''}`}
@@ -1053,11 +1091,11 @@ export function AgentChat() {
           </div>
         )}
 
-        {/* Inline prompts */}
-        {permissions.map((p) => (
+        {/* Inline prompts (workspace-scoped) */}
+        {wsPermissions.map((p) => (
           <PermissionInline key={p.id} p={p} />
         ))}
-        {questions.map((q) => (
+        {wsQuestions.map((q) => (
           <QuestionInline key={q.id} q={q} />
         ))}
         {freshProposals.map((p) => (

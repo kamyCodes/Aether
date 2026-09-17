@@ -49,6 +49,51 @@ export interface ChatSession {
   title: string;
   messages: ChatMessage[];
   createdAt: number;
+  /** Workspace this thread belongs to — switching workspaces shows that
+   *  workspace's own threads, never another project's conversation. */
+  workspaceId: string | null;
+}
+
+/** Wire shape of GET/PUT /workspaces/:id/chats (server/chats.ts). */
+interface PersistedWorkspaceChats {
+  workspaceId: string;
+  activeChatId: string | null;
+  chatTaskId: string | null;
+  activeTaskId: string | null;
+  sessions: { id: string; title: string; createdAt: number; messages: ChatMessage[] }[];
+}
+
+/** Persist one workspace's chat state (debounced — bursts coalesce server-side). */
+const chatPersistTimers = new Map<string, ReturnType<typeof setTimeout>>();
+/** Abort controller for the in-flight ask-mode fetch — stopChat() aborts the
+ *  HTTP request and its SSE reader mid-stream. One at a time by design. */
+let chatAbort: AbortController | null = null;
+function persistChatsFor(workspaceId: string) {
+  if (!workspaceId) return;
+  const prev = chatPersistTimers.get(workspaceId);
+  if (prev) clearTimeout(prev);
+  chatPersistTimers.set(
+    workspaceId,
+    setTimeout(() => {
+      chatPersistTimers.delete(workspaceId);
+      const st = useStore.getState();
+      const sessions = st.chatSessions.filter((s) => s.workspaceId === workspaceId);
+      void put(`/workspaces/${workspaceId}/chats`, {
+        workspaceId,
+        activeChatId: st.activeChatId ?? null,
+        chatTaskId: st.chatTaskByWs[workspaceId] ?? null,
+        activeTaskId: st.activeTaskByWs[workspaceId] ?? null,
+        sessions: sessions.map((s) => ({
+          id: s.id,
+          title: s.title,
+          createdAt: s.createdAt,
+          messages: s.messages,
+        })),
+      }).catch(() => {
+        /* offline / workspace gone — retried on the next change */
+      });
+    }, 800),
+  );
 }
 
 export interface Toast {
@@ -128,11 +173,13 @@ interface AppState {
   chatStatus: StreamStatus | null;
   /** Ids of skills explicitly invoked via `/skill-name` in the current turn. */
   invokedSkillIds: string[];
-  /** Task bound to the CURRENT chat thread (cleared by new-chat). */
-  chatTaskId: string | null;
   // agent
   tasks: AgentTask[];
-  activeTaskId: string | null;
+  /** Last-selected task per workspace — the task list is scoped to the
+   *  workspace on screen, so one project's run never leaks into another. */
+  activeTaskByWs: Record<string, string>;
+  /** Task bound to the current chat thread, per workspace. */
+  chatTaskByWs: Record<string, string>;
   agentStream: Record<string, string>;
   /** Composer mode shared by the unified composer (Agent / Ask / Plan). */
   composerMode: 'agent' | 'ask' | 'plan';
@@ -149,7 +196,18 @@ interface AppState {
   activity: ActivityItem[];
   usage: UsageEvent[];
   context: ContextReport | null;
-  modelHealth: Record<string, { status: string; lastChecked: number; lastError?: string }>;
+  /** Live health snapshot from the backend monitor (WS-pushed on change). */
+  modelHealth: Record<
+    string,
+    {
+      status: string;
+      lastChecked: number;
+      lastLatencyMs?: number;
+      lastError?: string;
+      consecutiveFailures?: number;
+      cooldownUntil?: number;
+    }
+  >;
   skills: Skill[];
   terminals: TerminalInfo[];
   wsStatus: 'connecting' | 'open' | 'closed';
@@ -188,6 +246,9 @@ interface AppState {
   selectChat: (id: string) => void;
   deleteChat: (id: string) => void;
   sendChat: (content: string, attachments?: ChatMessage['attachments']) => Promise<void>;
+  /** User-requested stop of the ask-mode stream: aborts the fetch, keeps
+   *  whatever partial text already arrived, and disables the auto-retry. */
+  stopChat: () => void;
   startTask: (prompt: string, mode: 'agent' | 'ask' | 'plan') => Promise<void>;
   loadTasks: () => Promise<void>;
   loadMemory: () => Promise<void>;
@@ -195,6 +256,7 @@ interface AppState {
   removeMemory: (id: string) => Promise<void>;
   clearMemory: () => Promise<void>;
   selectTask: (id: string | null) => void;
+  // (per-workspace task bindings replaced the old global activeTaskId)
   taskAction: (id: string, action: 'pause' | 'resume' | 'cancel') => Promise<void>;
   approvePlan: (taskId: string, model?: string) => Promise<void>;
   rejectPlan: (taskId: string) => Promise<void>;
@@ -207,6 +269,7 @@ interface AppState {
   toggleSkill: (id: string) => Promise<void>;
   saveSkill: (s: Skill) => Promise<void>;
   deleteSkill: (id: string) => Promise<void>;
+  wipeData: (keep: string[]) => Promise<{ removed: string[]; errors: string[]; dataDir: string }>;
   setWsStatus: (s: AppState['wsStatus']) => void;
   handleWs: (type: string, payload: unknown) => void;
   acceptProposal: (id: string) => Promise<void>;
@@ -236,7 +299,19 @@ export function connectWs(store: {
   ws = new WebSocket(`${proto}://${location.host}/ws`);
   (window as unknown as { __omniws?: WebSocket }).__omniws = ws;
   store.setWsStatus('connecting');
-  ws.onopen = () => store.setWsStatus('open');
+  ws.onopen = () => {
+    store.setWsStatus('open');
+    // Self-heal: the backend may have (re)started after boot. If the model
+    // catalog never loaded (or was marked disconnected), re-fetch now —
+    // otherwise the composer pickers stay empty for the whole session.
+    const st = useStore.getState();
+    if (!st.models.length || !st.omniConnected) void st.refreshModels();
+    // Re-sync tasks: task state observed before a backend restart is a
+    // ghost otherwise — the old socket delivered 'running' that the new
+    // process will never finalize, and the status bar shows it forever.
+    void st.loadTasks();
+    void st.refreshHealth();
+  };
   ws.onclose = () => {
     store.setWsStatus('closed');
     setTimeout(() => connectWs(store), 2000);
@@ -275,11 +350,11 @@ export const useStore = create<AppState>((setState, getState) => ({
   chatModel: '',
   chatStatus: null,
   invokedSkillIds: [],
-  chatTaskId: null,
   composerMode: 'agent',
   composerPrefill: '',
   tasks: [],
-  activeTaskId: null,
+  activeTaskByWs: {},
+  chatTaskByWs: {},
   agentStream: {},
   memory: [],
   toasts: [],
@@ -329,15 +404,18 @@ export const useStore = create<AppState>((setState, getState) => ({
           ...(staleProposalIds.size
             ? { proposals: st.proposals.filter((p) => !staleProposalIds.has(p.id)) }
             : {}),
-          // Finalize the pending assistant bubble in EVERY session — a run
-          // may outlive the chat it started in (new-chat mid-run), and its
-          // bubble must never hang as "…" forever in the old thread.
+          // Finalize the pending assistant bubble of the run's OWN thread —
+          // bubbles carry the taskId, so the answer settles in the chat that
+          // spawned the run even if the user has switched workspace since.
+          // Untagged (legacy) bubbles finalize as before.
           ...(terminal
             ? {
                 chatSessions: st.chatSessions.map((s) => ({
                   ...s,
                   messages: s.messages.map((msg) =>
-                    msg.pending && msg.role === 'assistant'
+                    msg.pending &&
+                    msg.role === 'assistant' &&
+                    (!msg.taskId || msg.taskId === t.id)
                       ? {
                           ...msg,
                           pending: false,
@@ -399,6 +477,13 @@ export const useStore = create<AppState>((setState, getState) => ({
       case 'memory':
         void getState().loadMemory();
         break;
+      case 'health:models': {
+        // Pushed by the backend monitor on every probe/outcome change —
+        // drives the live cooldown countdown in Settings → Models health.
+        const hs = payload as { models?: Record<string, never> };
+        if (hs?.models) setState({ modelHealth: hs.models as never });
+        break;
+      }
       case 'agent:delta': {
         const d = payload as { taskId: string; delta: string };
         setState({
@@ -410,7 +495,13 @@ export const useStore = create<AppState>((setState, getState) => ({
         break;
       }
       case 'agent:status': {
-        const s = payload as StreamStatus | null;
+        const s = payload as (StreamStatus & { taskId?: string }) | null;
+        // Scope stall/retry notices to the workspace actually showing the
+        // run — a retry in project B must not surface in project A's chat.
+        if (s?.taskId) {
+          const taskWs = st.tasks.find((t) => t.id === s.taskId)?.workspaceId;
+          if (taskWs && st.workspaceId && taskWs !== st.workspaceId) break;
+        }
         setState({ chatStatus: s });
         break;
       }
@@ -419,13 +510,15 @@ export const useStore = create<AppState>((setState, getState) => ({
         setState((s2) => ({
           agentStream: { ...s2.agentStream, [m.taskId]: '' },
           tasks: s2.tasks.map((t) => (t.id === m.taskId ? { ...t } : t)),
-          // The final answer becomes the pending assistant bubble's content.
+          // The final answer lands in the thread that OWNS the run (matched
+          // by the pending bubble's taskId) — never in whichever chat happens
+          // to be active, which could belong to a different workspace.
           chatSessions: s2.chatSessions.map((s) =>
-            s.id === s2.activeChatId
+            s.messages.some((msg) => msg.taskId === m.taskId && msg.pending)
               ? {
                   ...s,
                   messages: s.messages.map((msg) =>
-                    msg.pending && msg.role === 'assistant' ? { ...msg, content: m.content } : msg,
+                    msg.pending && msg.taskId === m.taskId ? { ...msg, content: m.content } : msg,
                   ),
                 }
               : s,
@@ -463,30 +556,96 @@ export const useStore = create<AppState>((setState, getState) => ({
 
   // Stop watching a folder and drop it from the registry. Files on disk are
   // never touched; only the session's association with the folder ends.
+  // The closed workspace's chat threads and task bindings end with it.
   closeWorkspace: async (id) => {
     await del(`/workspaces/${id}`);
+    // The workspace's persisted threads go with it (server drops its file).
+    const t = chatPersistTimers.get(id);
+    if (t) clearTimeout(t);
+    chatPersistTimers.delete(id);
     const st = getState();
     const rest = st.workspaces.filter((w) => w.id !== id);
+    const chatSessions = st.chatSessions.filter((s) => s.workspaceId !== id);
+    const activeTaskByWs = { ...st.activeTaskByWs };
+    const chatTaskByWs = { ...st.chatTaskByWs };
+    delete activeTaskByWs[id];
+    delete chatTaskByWs[id];
+    const wasActive = st.workspaceId === id;
     setState({
       workspaces: rest,
-      workspaceId: null,
-      tree: null,
-      tabs: [],
-      activeTabId: null,
-      gitStatuses: {},
-      gitBranch: '',
+      chatSessions,
+      activeTaskByWs,
+      chatTaskByWs,
+      ...(wasActive
+        ? {
+            workspaceId: null,
+            tree: null,
+            tabs: [],
+            activeTabId: null,
+            activeChatId: null,
+            gitStatuses: {},
+            gitBranch: '',
+          }
+        : {}),
     });
-    if (rest.length) await getState().selectWorkspace(rest[0].id);
+    if (wasActive && rest.length) await getState().selectWorkspace(rest[0].id);
   },
 
   selectWorkspace: async (id) => {
-    setState({ workspaceId: id, tree: null, tabs: [], activeTabId: null });
+    const st = getState();
+    // Each workspace gets its own session: switch the chat panel to this
+    // workspace's most recent thread (or an empty one) and rebind its task.
+    const wsChats = st.chatSessions.filter((s) => s.workspaceId === id);
+    const nextChat = wsChats[0];
+    const boundTask = nextChat
+      ? ([...nextChat.messages].reverse().find((m) => m.taskId)?.taskId ?? null)
+      : null;
+    setState({
+      workspaceId: id,
+      tree: null,
+      tabs: [],
+      activeTabId: null,
+      activeChatId: nextChat?.id ?? null,
+      chatStatus: null, // never carry the previous workspace's stall notice over
+      ...(boundTask ? { chatTaskByWs: { ...st.chatTaskByWs, [id]: boundTask } } : {}),
+    });
     await getState().refreshTree();
     void getState().loadMemory();
     void getState().refreshSkills(); // re-scope the skills panel to this project
     void post(`/workspaces/${id}/index`, { incremental: false }).then(() =>
       getState().refreshContext(),
     );
+    // Hydrate persisted threads from disk (after an app restart the store
+    // starts empty for this workspace). Server truth merges under local
+    // state — a hot session in memory always wins over the stored mirror.
+    void get<PersistedWorkspaceChats>(`/workspaces/${id}/chats`)
+      .then((saved) => {
+        if (!saved?.sessions?.length || getState().workspaceId !== id) return;
+        const cur = getState();
+        if (cur.chatSessions.some((s) => s.workspaceId === id)) return; // live session present
+        const sessions: ChatSession[] = saved.sessions.map((s) => ({
+          ...s,
+          workspaceId: id,
+        }));
+        const active =
+          saved.activeChatId && sessions.some((s) => s.id === saved.activeChatId)
+            ? saved.activeChatId
+            : sessions[0].id;
+        setState({
+          chatSessions: [...sessions, ...cur.chatSessions],
+          activeChatId: cur.activeChatId ?? active,
+          chatTaskByWs: { ...cur.chatTaskByWs, [id]: cur.chatTaskByWs[id] || saved.chatTaskId || '' },
+          activeTaskByWs: {
+            ...cur.activeTaskByWs,
+            ...(saved.activeTaskId && !cur.activeTaskByWs[id]
+              ? { [id]: saved.activeTaskId }
+              : {}),
+          },
+        });
+      })
+      .catch(() => {
+        /* no persisted threads yet */
+      });
   },
 
   refreshTree: async () => {
@@ -762,6 +921,11 @@ export const useStore = create<AppState>((setState, getState) => ({
       }
     } catch (e) {
       setState({ omniConnected: false, omniError: e instanceof Error ? e.message : String(e) });
+      // One delayed retry: a backend restart or cold gateway at boot must not
+      // leave the model pickers empty until the app is reloaded.
+      setTimeout(() => {
+        if (!useStore.getState().models.length) void useStore.getState().refreshModels();
+      }, 4000);
     }
   },
 
@@ -778,48 +942,71 @@ export const useStore = create<AppState>((setState, getState) => ({
   },
 
   newChat: () => {
+    const wid = getState().workspaceId;
     const session: ChatSession = {
       id: Math.random().toString(36).slice(2, 10),
       title: 'New chat',
       messages: [],
       createdAt: Date.now(),
+      workspaceId: wid,
     };
     // A new chat clears the panel completely: no stale run artifacts, no
     // live badge, no leftover stream text or status line from the old thread.
+    // It stays scoped to THIS workspace — other projects' threads untouched.
     setState({
       chatSessions: [session, ...getState().chatSessions],
       activeChatId: session.id,
-      activeTaskId: null,
-      chatTaskId: null,
+      ...(wid ? { chatTaskByWs: { ...getState().chatTaskByWs, [wid]: '' } } : {}),
       agentStream: {},
       chatStatus: null,
       invokedSkillIds: [],
       chatStreaming: false,
     });
+    if (wid) persistChatsFor(wid);
   },
 
   selectChat: (id) => {
     // Returning to a session re-binds its task (if any) so the live badge
     // and stream follow the conversation you're actually looking at.
-    const session = getState().chatSessions.find((s) => s.id === id);
+    const st = getState();
+    const session = st.chatSessions.find((s) => s.id === id);
     const boundTask =
       [...(session?.messages ?? [])].reverse().find((m) => m.taskId)?.taskId ?? null;
-    setState({ activeChatId: id, ...(boundTask ? { activeTaskId: boundTask } : {}) });
+    setState({
+      activeChatId: id,
+      ...(session?.workspaceId && boundTask
+        ? { chatTaskByWs: { ...st.chatTaskByWs, [session.workspaceId]: boundTask } }
+        : {}),
+    });
+    if (session?.workspaceId) persistChatsFor(session.workspaceId);
   },
 
   deleteChat: (id) => {
     const st = getState();
+    const gone = st.chatSessions.find((s) => s.id === id);
     const sessions = st.chatSessions.filter((s) => s.id !== id);
     setState({
       chatSessions: sessions,
       activeChatId: st.activeChatId === id ? (sessions[0]?.id ?? null) : st.activeChatId,
     });
+    if (gone?.workspaceId) persistChatsFor(gone.workspaceId);
   },
 
   sendChat: async (content, attachments) => {
+    if (chatAbort) {
+      try {
+        chatAbort.abort();
+      } catch {
+        /* already done */
+      }
+    }
+    chatAbort = new AbortController();
     const st = getState();
     let activeId = st.activeChatId;
-    if (!activeId || !st.chatSessions.find((s) => s.id === activeId)) {
+    const active = st.chatSessions.find((s) => s.id === activeId);
+    // The thread must belong to the workspace on screen — never continue
+    // another project's conversation because it happened to be selected.
+    if (!active || active.workspaceId !== st.workspaceId) {
       st.newChat();
       activeId = getState().activeChatId;
     }
@@ -874,6 +1061,9 @@ export const useStore = create<AppState>((setState, getState) => ({
       invokedSkillIds: invokedSkill ? [invokedSkill.id] : [],
       chatStatus: { kind: 'thinking', reason: 'Waiting for the model…', ts: Date.now() },
     });
+    // The user's message is durable content — persist it right away (the
+    // pending assistant bubble streams in via updateAssistant below).
+    if (st.workspaceId) persistChatsFor(st.workspaceId);
 
     const session = getState().chatSessions.find((s) => s.id === activeId)!;
     const history = session.messages
@@ -897,6 +1087,9 @@ export const useStore = create<AppState>((setState, getState) => ({
         ),
         chatStreaming: !done && getState().chatStreaming,
       });
+      // Completed assistant answers are durable — persist on done only, not
+      // on every streamed token.
+      if (done && st.workspaceId) persistChatsFor(st.workspaceId);
     };
     const setStatus = (s: StreamStatus | null) => setState({ chatStatus: s });
 
@@ -910,6 +1103,7 @@ export const useStore = create<AppState>((setState, getState) => ({
           skillsEnabled: true,
           skillId: invokedSkill?.id,
         }),
+        signal: chatAbort?.signal,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
       if (!res.body) throw new Error('No response stream');
@@ -931,6 +1125,11 @@ export const useStore = create<AppState>((setState, getState) => ({
             if (payload.type === 'delta') {
               acc += payload.delta;
               updateAssistant(acc, false);
+            } else if (payload.type === 'reset') {
+              // Server switched to a fallback model mid-stream (the first
+              // model was dead) — discard partial text and start over.
+              acc = '';
+              updateAssistant('', false);
             } else if (payload.type === 'done') {
               acc = payload.text || acc;
               updateAssistant(acc, true);
@@ -953,15 +1152,19 @@ export const useStore = create<AppState>((setState, getState) => ({
     };
 
     // Network hiccup protocol: subtle status text, not a bubble. A bubble
-    // appears only when every attempt is exhausted.
+    // appears only when every attempt is exhausted. A user Stop aborts the
+    // fetch (AbortError) and exits WITHOUT retrying — the partial answer
+    // already streamed stays in the bubble.
     const MAX_ATTEMPTS = 3;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      if (chatAbort?.signal.aborted) break;
       try {
         await attemptOnce();
         setStatus(null);
         setState({ invokedSkillIds: [] });
         return;
       } catch (e) {
+        if (chatAbort?.signal.aborted) break;
         const msg = e instanceof Error ? e.message : String(e);
         if (attempt < MAX_ATTEMPTS) {
           setStatus({
@@ -981,6 +1184,45 @@ export const useStore = create<AppState>((setState, getState) => ({
     }
   },
 
+  stopChat: () => {
+    const ac = chatAbort;
+    if (ac) {
+      try {
+        ac.abort();
+      } catch {
+        /* already aborted */
+      }
+    }
+    // Finalize the streaming bubble NOW with whatever partial text arrived:
+    // the aborted reader will reject inside sendChat and only break out of
+    // its retry loop — it never touches state again after this.
+    const st = getState();
+    const sess = st.chatSessions.find((s) => s.id === st.activeChatId);
+    const streamingMsg = [...(sess?.messages ?? [])]
+      .reverse()
+      .find((m) => m.role === 'assistant' && m.pending && !m.taskId);
+    setState({
+      chatSessions: sess
+        ? st.chatSessions.map((s) =>
+            s.id === sess.id
+              ? {
+                  ...s,
+                  messages: s.messages.map((m) =>
+                    m.id === streamingMsg?.id
+                      ? { ...m, pending: false, content: m.content || '_(stopped)_' }
+                      : m,
+                  ),
+                }
+              : s,
+          )
+        : st.chatSessions,
+      chatStreaming: false,
+      chatStatus: null,
+      invokedSkillIds: [],
+    });
+    if (st.workspaceId) persistChatsFor(st.workspaceId);
+  },
+
   startTask: async (prompt, mode) => {
     const st = getState();
     if (!st.workspaceId) return;
@@ -988,7 +1230,10 @@ export const useStore = create<AppState>((setState, getState) => ({
     // pending assistant bubble that streams while the agent "thinks" and
     // settles on the final answer. Process noise stays in the activity log.
     let activeId = st.activeChatId;
-    if (!activeId || !st.chatSessions.find((s) => s.id === activeId)) {
+    const active = st.chatSessions.find((s) => s.id === activeId);
+    // Only continue a thread of THIS workspace — a task run from workspace A
+    // must never append into workspace B's conversation.
+    if (!active || active.workspaceId !== st.workspaceId) {
       st.newChat();
       activeId = getState().activeChatId;
     }
@@ -1023,32 +1268,81 @@ export const useStore = create<AppState>((setState, getState) => ({
       workspaceId: st.workspaceId,
       model: st.chatModel || st.selectedModel,
     });
+    // Tag the pending assistant bubble with the task id so the streamed
+    // answer settles into THIS thread even if the user switches workspace
+    // (or starts another run elsewhere) while it's streaming.
     setState({
       tasks: [task, ...st.tasks],
-      activeTaskId: task.id,
-      chatTaskId: task.id,
+      activeTaskByWs: { ...getState().activeTaskByWs, [st.workspaceId]: task.id },
+      chatTaskByWs: { ...getState().chatTaskByWs, [st.workspaceId]: task.id },
       agentStream: { ...st.agentStream, [task.id]: '' },
+      chatSessions: getState().chatSessions.map((s) =>
+        s.id === activeId
+          ? {
+              ...s,
+              messages: s.messages.map((m) =>
+                m.pending && m.role === 'assistant' ? { ...m, taskId: task.id } : m,
+              ),
+            }
+          : s,
+      ),
     });
   },
 
   loadTasks: async () => {
     try {
       const tasks = await get<AgentTask[]>('/agent/tasks');
-      if (tasks.length) {
-        setState({ tasks, activeTaskId: getState().activeTaskId ?? tasks[0].id });
-        // Replay in-flight streams after a reload: the backend holds the live
-        // buffer for running tasks, so a mid-run refresh doesn't blank the panel.
-        for (const t of tasks) {
-          if (t.status !== 'running') continue;
-          try {
-            const ss = await get<{ status: string; buffer: string }>(
-              `/agent/tasks/${t.id}/stream-state`,
-            );
-            if (ss.buffer)
-              setState((s2) => ({ agentStream: { ...s2.agentStream, [t.id]: ss.buffer } }));
-          } catch {
-            /* task may have finished between list and fetch */
-          }
+      // Replace unconditionally — an empty server list is the truth after a
+      // backend restart with a cleared registry, and stale client-side rows
+      // (e.g. a 'running' ghost the old process never finalized) must die.
+      const st = getState();
+      const wid = st.workspaceId;
+      const defaultForWs =
+        wid && !st.activeTaskByWs[wid] ? (tasks.find((t) => t.workspaceId === wid)?.id ?? null) : null;
+      setState({
+        tasks,
+        ...(wid && defaultForWs
+          ? { activeTaskByWs: { ...st.activeTaskByWs, [wid]: defaultForWs } }
+          : {}),
+      });
+      // Finalize pending chat bubbles whose task is already terminal on the
+      // server — a missed WS 'task' event (backend restart mid-run) must not
+      // leave typing dots spinning forever.
+      const terminalIds = new Set(
+        tasks
+          .filter((t) => ['completed', 'failed', 'cancelled'].includes(t.status))
+          .map((t) => t.id),
+      );
+      if (terminalIds.size) {
+        let touched = false;
+        const next = getState().chatSessions.map((s) => ({
+          ...s,
+          messages: s.messages.map((m) => {
+            if (m.role === 'assistant' && m.pending && m.taskId && terminalIds.has(m.taskId)) {
+              touched = true;
+              return {
+                ...m,
+                pending: false,
+                content: m.content || '(no response — task ended while away)',
+              };
+            }
+            return m;
+          }),
+        }));
+        if (touched) setState({ chatSessions: next });
+      }
+      // Replay in-flight streams after a reload: the backend holds the live
+      // buffer for running tasks, so a mid-run refresh doesn't blank the panel.
+      for (const t of tasks) {
+        if (t.status !== 'running') continue;
+        try {
+          const ss = await get<{ status: string; buffer: string }>(
+            `/agent/tasks/${t.id}/stream-state`,
+          );
+          if (ss.buffer)
+            setState((s2) => ({ agentStream: { ...s2.agentStream, [t.id]: ss.buffer } }));
+        } catch {
+          /* task may have finished between list and fetch */
         }
       }
     } catch {
@@ -1088,7 +1382,11 @@ export const useStore = create<AppState>((setState, getState) => ({
     await getState().loadMemory();
   },
 
-  selectTask: (id) => setState({ activeTaskId: id }),
+  selectTask: (id) => {
+    const wid = getState().workspaceId;
+    if (!wid) return;
+    setState({ activeTaskByWs: { ...getState().activeTaskByWs, [wid]: id ?? '' } });
+  },
 
   taskAction: async (id, action) => {
     await post(`/agent/tasks/${id}/${action}`);
@@ -1173,6 +1471,22 @@ export const useStore = create<AppState>((setState, getState) => ({
   rejectProposal: async (id) => {
     await post(`/proposals/${id}/reject`);
     setState({ proposals: getState().proposals.filter((p) => p.id !== id) });
+  },
+
+  wipeData: async (keep: string[]) => {
+    const result = await post<{ removed: string[]; errors: string[]; dataDir: string }>(
+      '/data/wipe',
+      { keep },
+    );
+    if (result.errors.length) {
+      getState().showToast(`Wipe completed with errors: ${result.errors.join(', ')}`);
+    } else {
+      getState().showToast(`Wiped: ${result.removed.join(', ')}`);
+    }
+    // Reload settings and models since they may have been wiped
+    await getState().loadSettings();
+    void getState().refreshModels();
+    return result;
   },
 
   loadReview: async () => {

@@ -36,9 +36,15 @@ export function WelcomeScreen({ onOpenPalette }: { onOpenPalette: () => void }) 
   const openTab = useStore((s) => s.openTab);
   const connected = useStore((s) => s.omniConnected);
   const tree = useStore((s) => s.tree);
-  const tasks = useStore((s) => s.tasks);
+  const allTasks = useStore((s) => s.tasks);
   const dirtyFiles = useStore((s) => s.dirtyFiles);
   const current = workspaces.find((w) => w.id === workspaceId);
+  // Resume/refresh suggestions describe THIS workspace's history only —
+  // another project's failed run must not appear here.
+  const tasks = React.useMemo(
+    () => allTasks.filter((t) => t.workspaceId === workspaceId),
+    [allTasks, workspaceId],
+  );
 
   const fileCount = React.useMemo(() => {
     let n = 0;

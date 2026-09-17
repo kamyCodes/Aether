@@ -695,6 +695,7 @@ input, textarea, select {
 }
 .titlebar .logo { font-weight: 600; font-size: 13px; letter-spacing: 0.1px; color: var(--text); display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; flex-shrink: 0; }
 .titlebar .logo-tagline { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+.titlebar .logo .logo-icon { display: block; width: 16px; height: 16px; object-fit: contain; border-radius: 4px; flex-shrink: 0; box-shadow: 0 0 0 1px rgba(255,255,255,0.14), 0 0 0 2.5px rgba(255,255,255,0.04); }
 .titlebar .hist-buttons { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .titlebar .hist-buttons .tb-icon-btn:disabled { opacity: 0.35; cursor: default; }
 .titlebar button { white-space: nowrap; }
@@ -1204,7 +1205,7 @@ input, textarea, select {
   padding: 8px 10px; font-family: inherit; font-size: 12.5px; line-height: 1.45;
 }
 .composer textarea:focus { outline: none; border-color: var(--accent); }
-.composer-row { display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; min-width: 0; }
+.composer-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; }
 .composer-row > * { min-width: 0; }
 .composer-row .mode-toggle { flex: 1 1 140px; min-width: 120px; }
 .composer-row .mode-toggle .segmented { display: inline-flex; flex-wrap: nowrap; width: 100%; }
@@ -1277,7 +1278,7 @@ input, textarea, select {
   position: absolute; inset: auto 12px 10px auto; pointer-events: none;
   display: flex; flex-direction: column; gap: 5px; align-items: flex-end; z-index: 4;
 }
-.term-idle-hint { font-size: 10.5px; color: var(--text-faint); background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; pointer-events: auto; cursor: pointer; }
+.term-idle-hint { font-size: 10.5px; color: var(--text-faint); background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; pointer-events: auto; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
 .term-idle-hint:hover { color: var(--text); border-color: var(--accent); }
 
 /* Tab dirty/close affordances */
@@ -1467,6 +1468,29 @@ input, textarea, select {
 .ac-msg.user .ac-bubble { background: color-mix(in srgb, var(--accent) 20%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-bottom-right-radius: 4px; }
 .ac-msg.assistant .ac-bubble { background: var(--bg-elev); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
 .ac-msg.error .ac-bubble { border-color: var(--err); }
+
+/* Streaming state: a soft sheen sweeps pending (still-receiving) bubbles —
+   "this bubble is live" without shouting. Overlay only (no layout shifts);
+   ::before keeps ReactMarkdown's children untouched. Reduced-motion users
+   get a static faint edge instead of the sweep. */
+.ac-msg.streaming { position: relative; overflow: hidden; }
+.ac-msg.streaming::after {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    color-mix(in srgb, var(--accent) 10%, transparent) 48%,
+    color-mix(in srgb, var(--accent) 16%, transparent) 52%,
+    transparent 70%
+  );
+  transform: translateX(-100%);
+  animation: ac-bubble-shimmer 2.4s var(--ease-standard) infinite;
+}
+@keyframes ac-bubble-shimmer { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) {
+  .ac-msg.streaming::after { animation: none; transform: none; opacity: 0.35; }
+}
 .ac-bubble p { margin: 0 0 6px; } .ac-bubble p:last-child { margin: 0; }
 .ac-bubble pre { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-input); padding: 6px var(--space-2); overflow-x: auto; font-size: 11.5px; }
 .ac-bubble code { font-family: var(--mono); font-size: 11.5px; }
@@ -1777,6 +1801,18 @@ input, textarea, select {
 }
 .status-item { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; letter-spacing: 0.1px; min-width: 0; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; }
 .status-item:first-child { flex-shrink: 0; }
+
+/* WebSocket-down pill: while live updates are interrupted the status bar
+   shows a spinner + "Reconnecting…" in the semantic warn color (never the
+   accent — same rule as .conn-dot) so staleness is visible at a glance. */
+.ws-pill {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+  border-radius: var(--r-chip);
+  padding: 1px 8px;
+  flex-shrink: 0;
+}
 .status-branch { color: var(--text-dim); }
 .status-norepo { color: var(--text-faint); font-style: italic; }
 .status-sep { color: var(--text-faint); opacity: 0.6; flex-shrink: 0; }
@@ -1822,6 +1858,72 @@ input, textarea, select {
 }
 .modal-close:hover { background: var(--hover); color: var(--text); }
 .modal { position: relative; }
+
+/* ================= Confirm dialog — animated glass overlay ================= */
+.confirm-overlay {
+  position: fixed; inset: 0;
+  background: color-mix(in srgb, var(--bg-canvas-soft) 55%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200;
+  animation: confirmFadeIn 200ms var(--ease-standard);
+}
+@keyframes confirmFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.confirm-dialog {
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(24px) saturate(1.5);
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--r-panel);
+  width: 380px; max-width: 88vw;
+  padding: 20px 24px 16px;
+  box-shadow: var(--shadow-pop), var(--inset-top);
+  animation: confirmSlideIn 280ms var(--spring);
+}
+@keyframes confirmSlideIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.confirm-icon-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+}
+.confirm-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 50%;
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  color: var(--warn); flex-shrink: 0;
+}
+.confirm-icon.danger {
+  background: color-mix(in srgb, var(--err) 14%, transparent);
+  color: var(--err);
+}
+.confirm-title {
+  font-size: 14px; font-weight: 600; color: var(--text); margin: 0;
+}
+.confirm-message {
+  font-size: 12.5px; color: var(--text-dim); line-height: 1.55; margin: 0 0 16px;
+}
+.confirm-actions {
+  display: flex; gap: 8px; justify-content: flex-end;
+}
+.confirm-btn {
+  padding: 7px 16px; border-radius: var(--r-control);
+  font-size: 12.5px; font-weight: 500; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg-elev); color: var(--text);
+  transition: background var(--t-fast) var(--ease-standard), border-color var(--t-fast) var(--ease-standard), transform var(--t-fast) var(--ease-standard);
+}
+.confirm-btn:hover { background: var(--hover); border-color: var(--border-strong); transform: translateY(-1px); }
+.confirm-btn:active { transform: translateY(0) scale(0.97); }
+.confirm-btn.cancel:hover { color: var(--text-dim); }
+.confirm-btn.primary {
+  background: var(--accent); border-color: transparent; color: #fff; font-weight: 600;
+}
+.confirm-btn.primary:hover { background: var(--accent-press); border-color: transparent; box-shadow: 0 3px 12px color-mix(in srgb, var(--accent) 32%, transparent); }
+.confirm-btn.danger {
+  background: var(--err); border-color: transparent; color: #fff; font-weight: 600;
+}
+.confirm-btn.danger:hover { background: color-mix(in srgb, var(--err) 85%, black); border-color: transparent; box-shadow: 0 3px 12px color-mix(in srgb, var(--err) 32%, transparent); }
 
 .modal-input { margin: 12px 14px; font-size: 13px; }
 .modal-results { overflow-y: auto; border-top: 1px solid var(--border); }
@@ -1909,7 +2011,7 @@ input, textarea, select {
   font-size: 12.5px; line-height: 1.5;
   min-height: 36px; max-height: 120px;
 }
-.composer-row { display: flex; gap: 6px; align-items: center; margin-top: 6px; flex-wrap: nowrap; min-width: 0; }
+.composer-row { display: flex; gap: 6px; align-items: center; margin-top: 6px; flex-wrap: wrap; min-width: 0; }
 .composer-row .mode-toggle { flex: 1 1 140px; min-width: 120px; }
 .composer-row .mode-toggle .segmented .segment { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 6px; }
 .composer-row .model-select { min-width: 0; max-width: 180px; flex-shrink: 1; }
@@ -1930,13 +2032,13 @@ input, textarea, select {
 .term-tab { max-width: 180px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 1; }
 .term-tabs .term-new { flex-shrink: 0; }
 
-/* Terminal suggestion chips — dynamic, project-aware, click-to-run. */
-.term-suggest-row {
-  position: absolute; left: var(--space-3); bottom: var(--space-3);
+/* Terminal suggestion chips — dynamic, project-aware, click-to-run.
+   Rendered in the status strip (normal flow) so the terminal output can
+   never cover them; the old floating row over the stage is retired. */
+.term-status-actions {
   display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
-  max-width: calc(100% - 24px); z-index: 4; pointer-events: none;
+  min-width: 0; overflow-x: auto;
 }
-.term-suggest-row .term-idle-hint { pointer-events: auto; }
 .term-idle-caption { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.6px; }
 .term-idle .term-idle-hint { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; }
 .term-idle { max-width: calc(100% - 24px); }
@@ -1947,6 +2049,31 @@ input, textarea, select {
 }
 .term-tab:hover { background: var(--hover); color: var(--text); }
 .term-tab.active { background: var(--seg-active); color: var(--text); box-shadow: var(--seg-active-shadow); }
+
+/* Per-workspace identity on terminal tabs: a small project-name chip so a
+   multi-workspace session never leaves tab ownership ambiguous, plus a live
+   activity dot/count when an agent task runs in that workspace. */
+.term-tab-ws {
+  font-size: 9px; font-weight: 600; letter-spacing: 0.4px;
+  color: var(--text-faint); background: var(--hover);
+  padding: 1px 5px; border-radius: var(--r-chip); max-width: 72px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.term-tab.active .term-tab-ws { color: var(--text-dim); }
+.ws-live-count {
+  min-width: 13px; height: 13px; padding: 0 3px; border-radius: var(--r-chip);
+  background: var(--accent); color: var(--accent-contrast, #fff);
+  font-size: 9px; font-weight: 700; line-height: 13px; text-align: center;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.ws-live-count.tab-inline { background: var(--ok); width: auto; padding: 0 4px; color: var(--bg); font-size: 8px; }
+.ws-live-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--text-dim);
+  border: 1px dashed var(--border-strong);
+}
+.ws-live-badge:hover { color: var(--text); border-color: var(--accent); }
+.live-ws-dot { box-shadow: 0 0 5px color-mix(in srgb, currentColor 45%, transparent); }
 
 .preview-frame { width: 100%; height: 100%; border: none; background: var(--bg); border-radius: 0 0 var(--r-panel) var(--r-panel); }
 .preview-toolbar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; }
@@ -2157,6 +2284,13 @@ button svg { vertical-align: -2px; margin-right: 4px; }
   white-space: nowrap;
 }
 .health-dim { color: var(--text-dim); white-space: nowrap; }
+/* Live cooldown countdown in the Models health table — tabular digits so
+   the per-second tick doesn't jitter the row. */
+.health-countdown {
+  color: var(--warn, #e0a53c);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
 .health-err { color: var(--text-dim); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
 .health-fails { color: var(--text-dim); font-size: 10px; margin-left: var(--space-1); }
 
@@ -2169,6 +2303,42 @@ button svg { vertical-align: -2px; margin-right: 4px; }
 .settings-log-error { color: var(--err, #e5725f); flex-shrink: 0; }
 .settings-logs-clear { align-self: flex-start; margin-top: 6px; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); background: none; border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; cursor: pointer; }
 .settings-logs-clear:hover { color: var(--err, #e5725f); border-color: var(--err, #e5725f); }
+/* Re-probe all models: a real button — readable label, comfortable hit
+   area, full-width so it never squishes against the table edge. */
+.settings-reprobe {
+  align-self: stretch;
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--bg-elev, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 6px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: border-color 120ms var(--ease-standard, ease), color 120ms var(--ease-standard, ease), background 120ms var(--ease-standard, ease);
+}
+.settings-reprobe:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.settings-reprobe:disabled { opacity: 0.6; cursor: default; }
+
+/* ============ Data wipe section ============ */
+.settings-wipe { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 8px; }
+.settings-wipe-body { margin-top: 6px; display: flex; flex-direction: column; gap: 8px; }
+.settings-wipe-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.settings-wipe-item { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: var(--radius-badge); cursor: pointer; transition: background var(--t-fast) ease; }
+.settings-wipe-item:hover { background: var(--hover); }
+.settings-wipe-item input[type='checkbox'] { accent-color: var(--accent); cursor: pointer; }
+.settings-wipe-label { font-size: 12px; font-weight: 500; color: var(--text); }
+.settings-wipe-desc { font-size: 10px; color: var(--text-faint); margin-left: auto; white-space: nowrap; }
+.settings-wipe-actions { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.settings-wipe-keepall, .settings-wipe-keepnone { font-size: 11px; color: var(--text-dim); background: none; border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; cursor: pointer; }
+.settings-wipe-keepall:hover, .settings-wipe-keepnone:hover { color: var(--text); border-color: var(--border-strong); }
+.settings-wipe-btn { font-size: 11px; color: var(--err, #e5725f) !important; border-color: var(--err, #e5725f) !important; display: inline-flex; align-items: center; gap: 4px; }
+.settings-wipe-btn:hover { background: color-mix(in srgb, var(--err, #e5725f) 10%, transparent) !important; }
 
 /* ============ Antigravity-style artifacts ============ */
 

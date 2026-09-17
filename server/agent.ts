@@ -608,7 +608,7 @@ export class AgentEngine {
           onDelta: (d) => {
             this.streamBuf.set(task.id, (this.streamBuf.get(task.id) ?? '') + d);
             bus.emit('agent:delta', { taskId: task.id, delta: d });
-            bus.emit('agent:status', null); // content flowing — clear any stall notice
+            bus.emit('agent:status', { taskId: task.id, kind: 'thinking', reason: 'Working…', ts: Date.now() }); // content flowing — clear any stall notice
           },
           onUsage: () => {},
         },
@@ -807,16 +807,15 @@ export class AgentEngine {
       // task.model keeps the user's originally REQUESTED model (often a combo
       // alias like auto/best-coding); it is deliberately NOT overwritten with
       // the concrete served model, because the gateway rotates routes between
-      // calls and the alias re-resolves to a working route each time.
-      const requestedModel = task.model;
-      if (autoDecision) {
+      // Only log routing when something unusual happened (fallback, cooldown)
+      // — normal routing is an implementation detail, not user-facing info.
+      if (autoDecision && autoDecision.candidates.length > 0) {
         this.activity(
           task.id,
-          `Auto-routed to ${autoDecision.model}: ${autoDecision.reason}`,
+          `Routed to ${autoDecision.model} (preferred models in cooldown)`,
           'done',
         );
       }
-      this.activity(task.id, `Using model ${effective}`, 'done');
 
       const streamStart = Date.now();
       let usageSeen = false;
@@ -831,7 +830,7 @@ export class AgentEngine {
           onDelta: (d) => {
             this.streamBuf.set(task.id, (this.streamBuf.get(task.id) ?? '') + d);
             bus.emit('agent:delta', { taskId: task.id, delta: d });
-            bus.emit('agent:status', null); // content flowing — clear any stall notice
+            bus.emit('agent:status', { taskId: task.id, kind: 'thinking', reason: 'Working…', ts: Date.now() }); // content flowing — clear any stall notice
           },
           onUsage: (u) => {
             if (u) {
@@ -873,7 +872,7 @@ export class AgentEngine {
         // via the returned finish() callback, so a recovered retry never
         // leaves a dangling "running" item in the activity feed.
         const effectiveAlias =
-          requestedModel && requestedModel.startsWith('auto/') ? requestedModel : null;
+          task.model && task.model.startsWith('auto/') ? task.model : null;
         let finish: (ok: boolean, note: string) => void;
         if (effectiveAlias && effectiveAlias !== effective && !retryWithNext.comboRetried) {
           retryWithNext.comboRetried = true;
@@ -882,6 +881,7 @@ export class AgentEngine {
             reason: `Route ${effective} unavailable — retrying`,
             attempt: 1,
             maxAttempts: 2,
+            taskId: task.id,
             ts: Date.now(),
           });
           const item = this.activity(
@@ -928,6 +928,7 @@ export class AgentEngine {
           reason: `Model ${effective} unavailable — retrying`,
           attempt: 1,
           maxAttempts: 2,
+          taskId: task.id,
           ts: Date.now(),
         });
         const item = this.activity(
@@ -985,18 +986,19 @@ export class AgentEngine {
         // recovery, not a dangling "running" step.
         finish(!(result.text === '' && !result.toolCalls?.length && !result.finish), 'answered');
       }
-      // Surface the model that actually served the request (gateway may
-      // substitute on alias resolution or rate-limit rotation).
-      if (result.resolvedModel && result.resolvedModel !== effective) {
-        this.activity(task.id, `Served by ${result.resolvedModel} (for ${effective})`, 'done');
+      // Gateway substituted a different model (rate-limit rotation, alias resolution).
+      // Only surface this when it's a real fallback — not routine alias resolution.
+      if (result.resolvedModel && result.resolvedModel !== effective && !result.resolvedModel.startsWith('auto/')) {
+        this.activity(task.id, `Served by ${result.resolvedModel}`, 'done');
         bus.emit('agent:status', {
           kind: 'degraded',
           reason: `Routed to fallback model ${result.resolvedModel}`,
+          taskId: task.id,
           ts: Date.now(),
         });
       } else if (!result.text && !result.toolCalls.length) {
         // First token latency: clear the retry status once real content lands.
-        bus.emit('agent:status', null);
+        bus.emit('agent:status', { taskId: task.id, kind: 'thinking', reason: 'Working…', ts: Date.now() });
       }
       // Robustness: a gateway that streams keepalives + an error chunk and
       // then ends (no text, no tool calls, no finish) is a failed request,

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Plus, X, Search, Sparkles, CircleCheck, CircleX, Play } from 'lucide-react';
 import { useStore, wsSend, getWs } from '../lib/store';
-import { get } from '../lib/api';
+import { get, post } from '../lib/api';
 import { GlassButton } from './glass';
 
 interface TermInstance {
@@ -9,6 +9,9 @@ interface TermInstance {
   title: string;
   cwd?: string;
   integrated?: boolean;
+  /** Workspace this terminal belongs to — only this workspace's terminals
+   *  render in the tab strip. */
+  workspaceId?: string;
 }
 
 /** Structured command record mirrored from the server's OSC 633 tracking. */
@@ -114,7 +117,10 @@ export function TerminalPanel() {
   const [suggestions, setSuggestions] = useState<TermSuggestion[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const mountLock = useRef(false);
+  /** Workspaces this panel already spawned (or adopted) a terminal for —
+   *  one auto-shell per workspace per panel lifetime; re-open after a kill
+   *  is manual (+ button), never an auto-respawn. */
+  const spawnedRef = useRef<Set<string>>(new Set());
   const xtermRefs = useRef<
     Map<
       string,
@@ -133,6 +139,24 @@ export function TerminalPanel() {
   const theme = useStore((s) => s.settings?.ui.theme ?? 'dark');
   const workspaceId = useStore((s) => s.workspaceId);
   const cwd = useStore((s) => s.workspaces.find((w) => w.id === s.workspaceId)?.root);
+  // Per-workspace identity for tab chips + cross-workspace activity. Task
+  // statuses treat every non-terminal state as "live" (queued/planning/
+  // running/verifying/paused/awaiting-*), matching the composer's busy rule.
+  const workspaces = useStore((s) => s.workspaces);
+  const tasks = useStore((s) => s.tasks);
+  const TERMINAL_TASK_STATES = new Set(['completed', 'failed', 'cancelled']);
+  const liveTasksByWs = new Map<string, number>();
+  for (const t of tasks) {
+    if (TERMINAL_TASK_STATES.has(t.status)) continue;
+    liveTasksByWs.set(t.workspaceId, (liveTasksByWs.get(t.workspaceId) ?? 0) + 1);
+  }
+  const wsName = (id?: string | null) => workspaces.find((w) => w.id === id)?.name ?? 'workspace';
+  const wsHue = (id?: string | null) => {
+    const s = id ?? '';
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return h % 360;
+  };
 
   // Dynamic, project-aware suggestions (package.json scripts, git status, …).
   // Re-probed whenever the workspace changes — they're keyed to the project.
@@ -166,6 +190,20 @@ export function TerminalPanel() {
             const t = payload as TermInstance;
             setTerms((prev) => (prev.some((p) => p.id === t.id) ? prev : [...prev, t]));
             setActiveId((cur) => cur ?? t.id);
+          } else if (type === 'term:replay') {
+            // Server replayed a session's scrollback (terminal opened before
+            // this socket attached): queue it like any other data.
+            const { id, data } = payload as { id: string; data: string };
+            const clean = sanitizeTermChunk(data);
+            const entry = xtermRefs.current.get(id);
+            if (entry) entry.term.write(clean);
+            else bufferFor(id).push(clean);
+          } else if (type === 'term:closed') {
+            // Session ended elsewhere (other client, workspace close, REST
+            // call): drop the tab so no dead terminal lingers in the strip.
+            const { id } = payload as { id: string };
+            setTerms((prev) => prev.filter((t) => t.id !== id));
+            setActiveId((cur) => (cur === id ? null : cur));
           } else if (type === 'term:data') {
             const { id, data } = payload as { id: string; data: string };
             const clean = sanitizeTermChunk(data);
@@ -226,15 +264,101 @@ export function TerminalPanel() {
     };
   }, []);
 
-  // Auto-spawn one terminal when the panel first has a workspace.
+  // Only this workspace's terminals in the tab strip.
+  const wsTerms = terms.filter((t) => t.workspaceId === workspaceId);
+
+  // Adopt sessions that already exist server-side for this workspace
+  // (app reload, panel re-open): list them, mark them known, replay is
+  // requested per-terminal when its xterm mounts. Auto-spawn waits for
+  // this lookup so a reload never doubles the tab strip.
+  const [adoptReady, setAdoptReady] = useState(false);
   useEffect(() => {
-    if (cwd && terms.length === 0 && !mountLock.current) {
-      mountLock.current = true;
-      wsSend('term:create', { cwd });
-    }
-    if (!cwd) mountLock.current = false;
+    if (!workspaceId) return;
+    setAdoptReady(false);
+    let cancelled = false;
+    get<{ id: string; title: string; cwd: string; workspaceId?: string; integrated?: boolean }[]>(
+      `/terminals?workspaceId=${encodeURIComponent(workspaceId)}`,
+    )
+      .then((list) => {
+        if (cancelled || !Array.isArray(list)) return;
+        setTerms((prev) => {
+          const known = new Set(prev.map((t) => t.id));
+          const adopted = list
+            .filter((t) => t.workspaceId === workspaceId && !known.has(t.id))
+            .map((t) => ({ ...t, workspaceId }));
+          return adopted.length ? [...prev, ...adopted] : prev;
+        });
+      })
+      .catch(() => {
+        /* panel falls back to auto-spawn */
+      })
+      .finally(() => {
+        if (!cancelled) setAdoptReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId]);
+
+  // Zombie-tab sweep: after an app restart the persisted-tab stash may hold
+  // metadata for shells that no longer exist. Reviving those as metadata-only
+  // tabs produced empty husks that resurrected on every restart (and were
+  // never pruned when closed) — the tab strip piled up with dead duplicates.
+  // Now: only persisted tabs whose session is STILL LIVE server-side count
+  // (the adopt pass adds those by id anyway); everything dead is acked out of
+  // the stash so it never comes back. With no live sessions, auto-spawn below
+  // creates one fresh, working shell instead of a strip of corpses.
+  const [reviveReady, setReviveReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      get<{ id: string }[]>('/terminals'),
+      get<{ tabs: { id: string; title: string; cwd: string; workspaceId?: string }[] }>(
+        '/terminals/persisted',
+      ),
+    ])
+      .then(async ([live, r]) => {
+        if (cancelled) return;
+        const liveIds = new Set((live ?? []).map((t) => t.id));
+        const alive = (r.tabs ?? []).filter((t) => t.workspaceId && liveIds.has(t.id));
+        // Ack with only the alive ids — the server drops the rest from the
+        // stash, so a dead tab can never resurrect on a later restart.
+        await post('/terminals/persisted/ack', {
+          revived: alive.map((t) => t.id),
+        }).catch(() => {});
+      })
+      .catch(() => {
+        /* no persisted tabs — plain auto-spawn */
+      })
+      .finally(() => {
+        if (!cancelled) setReviveReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Auto-spawn one terminal per workspace: each workspace session gets its
+  // own shell on first open, spawned in that workspace's root. Only fires
+  // after the adopt lookup, the revive pass, and an open socket — a restart
+  // restores the persisted tabs instead of spawning fresh ones.
+  const wsStatus = useStore((s) => s.wsStatus);
+  useEffect(() => {
+    if (!cwd || !workspaceId || !adoptReady || !reviveReady || wsStatus !== 'open') return;
+    if (wsTerms.length > 0 || spawnedRef.current.has(workspaceId)) return;
+    spawnedRef.current.add(workspaceId);
+    wsSend('term:create', { cwd, workspaceId });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cwd, terms.length]);
+  }, [cwd, workspaceId, adoptReady, reviveReady, wsStatus, wsTerms.length]);
+
+  // Switching workspace: focus that workspace's last terminal (or none —
+  // an auto-spawn for the new workspace appears via the effect above).
+  useEffect(() => {
+    setActiveId((cur) => {
+      if (cur && wsTerms.some((t) => t.id === cur)) return cur;
+      return wsTerms[wsTerms.length - 1]?.id ?? null;
+    });
+  }, [workspaceId]);
 
   // Mount/unmount xterm instances as the active tab changes.
   useEffect(() => {
@@ -355,6 +479,10 @@ export function TerminalPanel() {
       if (buf) {
         buf.forEach((d) => term.write(d));
         buffers.delete(activeId);
+      } else {
+        // Terminal existed before this xterm mounted (adopted session or
+        // reload): ask the server to replay its scrollback tail.
+        wsSend('term:replay', { id: activeId });
       }
     })();
 
@@ -409,14 +537,14 @@ export function TerminalPanel() {
       useStore.getState().showToast('Open a workspace folder first — then a terminal can start there.');
       return;
     }
-    wsSend('term:create', { cwd });
+    wsSend('term:create', { cwd, workspaceId });
   }
   function killTerm(id: string, e: React.MouseEvent) {
     e.stopPropagation();
     wsSend('term:kill', { id });
     setTerms((prev) => {
       const next = prev.filter((t) => t.id !== id);
-      setActiveId((cur) => (cur === id ? (next[next.length - 1]?.id ?? null) : cur));
+      setActiveId((cur) => (cur === id ? (next.filter((t) => t.workspaceId === workspaceId).slice(-1)[0]?.id ?? null) : cur));
       return next;
     });
   }
@@ -427,7 +555,8 @@ export function TerminalPanel() {
    * runs and can Ctrl+C it like any other command — nothing executes silently.
    */
   function runSuggestion(command: string) {
-    const target = terms.find((t) => t.id === activeId) ?? terms[terms.length - 1];
+    const target =
+      wsTerms.find((t) => t.id === activeId) ?? wsTerms[wsTerms.length - 1];
     const runIn = (termId: string) => {
       // \r = Enter for the pty; the typed line is visible in scrollback.
       wsSend('term:input', { id: termId, data: `${command}\r` });
@@ -448,6 +577,7 @@ export function TerminalPanel() {
           const { type, payload } = JSON.parse(ev.data);
           if (type === 'term:created') {
             const t = payload as TermInstance;
+            if (t.workspaceId !== workspaceId) return; // not ours
             runIn(t.id);
             getWs()?.removeEventListener('message', onCreated);
           }
@@ -456,11 +586,11 @@ export function TerminalPanel() {
         }
       };
       getWs()?.addEventListener('message', onCreated);
-      wsSend('term:create', { cwd });
+      wsSend('term:create', { cwd, workspaceId });
     }
   }
 
-  const active = terms.find((t) => t.id === activeId);
+  const active = wsTerms.find((t) => t.id === activeId);
   const activeEntry = activeId ? xtermRefs.current.get(activeId) : null;
   void tick;
 
@@ -471,15 +601,31 @@ export function TerminalPanel() {
   return (
     <div className="term-panel">
       <div className="term-tabs">
-        {terms.map((t) => (
+        {wsTerms.map((t) => (
           <span
             key={t.id}
             className={`term-tab ${t.id === activeId ? 'active' : ''}`}
             onClick={() => setActiveId(t.id)}
             title={t.cwd || t.title}
           >
-            <span className={`term-tab-dot ${t.integrated ? 'integrated' : ''}`} />
+            <span
+              className={`term-tab-dot ${t.integrated ? 'integrated' : ''}`}
+              style={{ background: `hsl(${wsHue(t.workspaceId ?? workspaceId)} 70% 62%)` }}
+            />
+            {workspaces.length > 1 && (
+              <span className="term-tab-ws" title={`Terminal in ${wsName(t.workspaceId)}`}>
+                {wsName(t.workspaceId)}
+              </span>
+            )}
             {t.title}
+            {liveTasksByWs.has(t.workspaceId ?? '') && (
+              <span
+                className="ws-live-count tab-inline"
+                title="Agent task running in this workspace"
+              >
+                ●
+              </span>
+            )}
             <button
               className="term-tab-close"
               onClick={(e) => killTerm(t.id, e)}
@@ -493,6 +639,25 @@ export function TerminalPanel() {
         <GlassButton className="btn-glass glass term-new" onClick={createTerm} title="New terminal">
           <Plus size={13} />
         </GlassButton>
+        {/* Cross-workspace activity: one badge per OTHER workspace that has a
+            live agent task — click to jump straight to it. */}
+        {[...liveTasksByWs.entries()]
+          .filter(([wid]) => wid !== workspaceId)
+          .map(([wid, count]) => (
+            <button
+              key={wid}
+              className="term-tab ws-live-badge"
+              title={`${count} agent task${count === 1 ? '' : 's'} running in ${wsName(wid)} — click to switch`}
+              onClick={() => void useStore.getState().selectWorkspace(wid)}
+            >
+              <span
+                className="term-tab-dot pulse-dot live-ws-dot"
+                style={{ background: `hsl(${wsHue(wid)} 70% 62%)` }}
+              />
+              {wsName(wid)}
+              <span className="ws-live-count">{count}</span>
+            </button>
+          ))}
         <div className="term-tabs-spacer" />
         <button
           className={`term-search-btn ${searchOpen ? 'on' : ''}`}
@@ -535,7 +700,7 @@ export function TerminalPanel() {
       )}
       <div className="term-stage">
         <div ref={containerRef} className="terminal-container" />
-        {terms.length === 0 && (
+        {wsTerms.length === 0 && (
           <div className="term-idle">
             {!workspaceId ? (
               <>
@@ -570,20 +735,8 @@ export function TerminalPanel() {
             )}
           </div>
         )}
-        {terms.length > 0 && suggestions.length > 0 && (
-          <div className="term-suggest-row" aria-label="Suggested commands">
-            {suggestions.slice(0, 4).map((s) => (
-              <button
-                key={s.command}
-                className="term-idle-hint"
-                onClick={() => runSuggestion(s.command)}
-                title={`Run in terminal: ${s.command}`}
-              >
-                <Play size={9} /> {s.label}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Quick-action chips render in the status strip below (never over
+            the terminal output — absolute positioning buried them). */}
         {suggestion && (
           <button
             className="term-suggest fade-in"
@@ -604,7 +757,9 @@ export function TerminalPanel() {
           </button>
         )}
       </div>
-      {/* Status strip: exit decoration + Ask Agent affordance (Phase 4.2) */}
+      {/* Status strip: exit decoration + quick actions + Ask Agent affordance.
+          The suggestion chips live HERE (in normal flow) — floating them over
+          the terminal stage buried them under the prompt/output. */}
       <div className="term-status">
         {lastExit !== null &&
           (lastExit === 0 ? (
@@ -620,6 +775,20 @@ export function TerminalPanel() {
           <button className="term-ask-agent" onClick={askAgent}>
             <Sparkles size={11} /> Ask Agent to fix
           </button>
+        )}
+        {wsTerms.length > 0 && suggestions.length > 0 && (
+          <div className="term-status-actions" aria-label="Suggested commands">
+            {suggestions.slice(0, 4).map((s) => (
+              <button
+                key={s.command}
+                className="term-idle-hint"
+                onClick={() => runSuggestion(s.command)}
+                title={`Run in terminal: ${s.command}`}
+              >
+                <Play size={9} /> {s.label}
+              </button>
+            ))}
+          </div>
         )}
         <span className="term-status-spacer" />
         <span className="term-status-hint">

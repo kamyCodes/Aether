@@ -14,9 +14,19 @@ export function StatusBar() {
   const workspaces = useStore((s) => s.workspaces);
   const workspaceId = useStore((s) => s.workspaceId);
   const gitBranch = useStore((s) => s.gitBranch);
-  const running = tasks.filter((t) => t.status === 'running' || t.status === 'planning').length;
+  // Count only this workspace's runs — the status line describes the
+  // workspace session you're in, not every project with a live task.
+  const running = tasks.filter(
+    (t) =>
+      t.workspaceId === workspaceId &&
+      (t.status === 'running' || t.status === 'planning'),
+  ).length;
 
   const wsName = workspaces.find((w) => w.id === workspaceId)?.name;
+  // Live-update health: while the WebSocket is down, task/model/terminal
+  // events can't arrive — say so loudly instead of letting the UI look alive
+  // while silently going stale. The store auto-retries every 2s.
+  const wsDown = wsStatus !== 'open';
 
   const theme = settings?.ui.theme ?? 'dark';
   const themeLabel = theme === 'oled' ? 'OLED (true black)' : theme;
@@ -64,12 +74,20 @@ export function StatusBar() {
             : 'offline'}
       </span>
       <span className="status-sep">·</span>
-      <span className="status-item" title={`WebSocket to the local server: ${wsStatus}`}>
-        WS {wsStatus}
+      <span
+        className={`status-item${wsDown ? ' ws-pill' : ''}`}
+        title={
+          wsDown
+            ? 'Live updates interrupted — the app is reconnecting automatically (every 2s). Task, model, and terminal streams are paused until it succeeds.'
+            : `WebSocket to the local server: ${wsStatus}`
+        }
+      >
+        {wsDown && <Loader2 size={11} className="spin" />}
+        {wsDown ? (wsStatus === 'connecting' ? 'Connecting…' : 'Reconnecting…') : `WS ${wsStatus}`}
       </span>
       <span className="status-sep">·</span>
       <span className="status-item" title="Model used for chat and agent tasks">
-        {chatModel || 'no model'}
+        {chatModel || (omniConnected ? 'auto route' : 'no model')}
       </span>
       {running > 0 && (
         <>

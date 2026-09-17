@@ -1,35 +1,59 @@
+# ============================================================
 # Secrets & local config — never commit
+# ============================================================
 .env
 .env.local
+*.env
 models.config.json
 
+# ============================================================
 # Dependencies
+# ============================================================
 node_modules/
 
-# Build output
+# ============================================================
+# Build & packaging output (release artifacts live in GitHub
+# Releases; archives/ keeps previous-version installers locally)
+# ============================================================
 dist/
 dist-server/
-
-# Electron packaging output (release artifacts live in GitHub Releases)
-release/
 electron/dist/
+release/
+archives/
+builder-debug.yml
+builder-effective-config.yaml
 
+# ============================================================
 # Dev/preview artifacts
+# ============================================================
 .freebuff/*.log
 .freebuff/*.log.err
 
+# ============================================================
 # Runtime state
+# ============================================================
 *.pid
 .freebuff/project-id
 
-# Logs
+# ============================================================
+# Logs & debug output
+# ============================================================
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Editor
+# ============================================================
+# Editor & IDE
+# ============================================================
 .vscode/
 .idea/
+*.swp
+*.swo
 
+# ============================================================
 # OS cruft
+# ============================================================
 .DS_Store
 Thumbs.db
 desktop.ini

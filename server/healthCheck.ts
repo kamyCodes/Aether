@@ -54,12 +54,24 @@ export class HealthMonitor {
   private state: HealthFile = { models: {}, updatedAt: Date.now() };
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
+  /** One-shot probe timer per model — fires when its cooldown expires so the
+   *  model is re-checked (and cleared or re-cooled) automatically. */
+  private cooldownTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Notified on every state change — the WS layer broadcasts to clients. */
+  onUpdate: (() => void) | null = null;
 
   constructor(
     private omni: OmniClient,
     private getSettings: () => OmniSettings,
   ) {
     this.load();
+    // Persisted cooldowns from a previous run still have live deadlines:
+    // schedule their expiry probes so a restart doesn't strand a model in
+    // cooldown until the next full probe round.
+    const now = Date.now();
+    for (const [model, h] of Object.entries(this.state.models)) {
+      if (h.cooldownUntil && h.cooldownUntil > now) this.scheduleExpiryProbe(model, h.cooldownUntil);
+    }
   }
 
   private load() {
@@ -96,6 +108,38 @@ export class HealthMonitor {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
+    }
+    for (const t of this.cooldownTimers.values()) clearTimeout(t);
+    this.cooldownTimers.clear();
+  }
+
+  /** Arm the one-shot probe that fires when this model's cooldown expires.
+   *  A healthy result clears the cooldown; a failing one re-arms it (and
+   *  this method runs again), so recovery is fully automatic. */
+  private scheduleExpiryProbe(model: string, cooldownUntil: number) {
+    const prev = this.cooldownTimers.get(model);
+    if (prev) clearTimeout(prev);
+    const delay = Math.max(0, cooldownUntil - Date.now());
+    const t = setTimeout(
+      () => {
+        this.cooldownTimers.delete(model);
+        void this.probeOne(model).catch(() => {
+          /* probe errors are recorded internally */
+        });
+      },
+      // Unref: an idle backend must not be kept alive by a pending probe.
+      delay,
+    );
+    t.unref?.();
+    this.cooldownTimers.set(model, t);
+  }
+
+  /** Notify subscribers (WS broadcast) that health state changed. */
+  private notify() {
+    try {
+      this.onUpdate?.();
+    } catch {
+      /* subscriber errors must not break the monitor */
     }
   }
 
@@ -134,6 +178,9 @@ export class HealthMonitor {
     this.state.models[model] = h;
     this.state.updatedAt = Date.now();
     this.save();
+    this.notify();
+    // Real traffic just failed the model into cooldown — arm its expiry probe
+    if (h.cooldownUntil) this.scheduleExpiryProbe(model, h.cooldownUntil);
   }
 
   /**
@@ -191,20 +238,37 @@ export class HealthMonitor {
       h.consecutiveFailures += 1;
       h.status = 'failing';
       if (note) h.lastError = note;
-      if (h.consecutiveFailures >= FAILURES_BEFORE_COOLDOWN)
+      if (h.consecutiveFailures >= FAILURES_BEFORE_COOLDOWN) {
         h.cooldownUntil = Date.now() + COOLDOWN_MS;
+        this.scheduleExpiryProbe(model, h.cooldownUntil);
+      }
     }
     this.state.models[model] = h;
     this.state.updatedAt = Date.now();
+    this.save();
+    this.notify();
     return h;
   }
 
-  /** Probe every configured model, sequentially (cheap, low rate). */
+  /** Probe every configured model, sequentially (cheap, low rate).
+   *  Skips (without force):
+   *   - models in their post-failure cooldown — a probe would only fail
+   *     again and re-arm the 15-minute timer ("don't re-probe immediately");
+   *   - models probed very recently (fresh entry from the previous run's
+   *     persisted health.json, real-traffic outcomes, or another surface) —
+   *     the normal cadence picks them up on the next round.
+   *  force=true (manual "Re-probe all models now") bypasses both skips. */
   async probeAll(force = false): Promise<HealthFile> {
     if (this.running && !force) return this.state; // never stack probes
     this.running = true;
     try {
+      const now = Date.now();
       for (const model of modelsToProbe(this.getSettings())) {
+        const h = this.healthFor(model);
+        if (!force) {
+          if (h.cooldownUntil && h.cooldownUntil > now) continue;
+          if (now - h.lastChecked < CHECK_INTERVAL_MS / 2) continue;
+        }
         await this.probeOne(model);
       }
       this.save();

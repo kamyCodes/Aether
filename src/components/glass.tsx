@@ -110,7 +110,7 @@ export function GlassToggle({
       <SwitchPrimitive.Thumb asChild>
         <motion.span
           className="toggle-thumb"
-          animate={{ x: checked ? 24 : 0 }}
+          animate={{ x: checked ? 16 : 0 }}
           transition={
             reduceMotion ? { duration: 0.01 } : { type: 'spring', bounce: 0.45, duration: 0.5 }
           }

@@ -4,6 +4,7 @@ import { ChevronRight, ChevronDown, Trash2 } from 'lucide-react';
 import { useStore } from '../lib/store';
 import type { AppSettings } from '../../shared/types';
 import { GlassDropdown, GlassButton } from './glass';
+import { ConfirmModal } from './ConfirmModal';
 import { formatTime } from '../utils/dates';
 
 /** Curated accent presets — quick one-click swatches beside the fine-tune input. */
@@ -274,6 +275,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             )}
             <ModelHealthTable />
             <LogsSection />
+            <DataWipeSection />
           </div>
         </div>
       </div>
@@ -283,54 +285,52 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
 /**
  * Models health table — per-model probe status from the background health
- * monitor (~/.aether/health.json via /api/health/models). Shows status,
- * last probe time/latency, consecutive failures, last error, and the active
- * cooldown expiry so a cooled-down route is explainable at a glance.
- * Read-only: refreshes on mount and via the Refresh button; the "Test
- * connection" button above triggers a full on-demand re-probe.
+ * monitor, pushed live over the WebSocket (store.modelHealth) on every
+ * probe/outcome change. Shows status, last probe time/latency, consecutive
+ * failures, last error, and a LIVE per-second countdown to cooldown expiry —
+ * the backend re-probes automatically when it hits zero, so recovery is
+ * visible without touching anything.
  */
 function ModelHealthTable() {
   const [open, setOpen] = useState(false);
-  const [snapshot, setSnapshot] = useState<{
-    models: Record<
-      string,
-      {
-        status: string;
-        lastChecked: number;
-        lastLatencyMs?: number;
-        lastError?: string;
-        consecutiveFailures: number;
-        cooldownUntil?: number;
-      }
-    >;
-  } | null>(null);
-
+  // Live health state — the backend broadcasts health:models on every change,
+  // so cooldown expiries and re-probe results stream in without polling.
+  const modelHealth = useStore((s) => s.modelHealth);
+  const refreshHealth = useStore((s) => s.refreshHealth);
+  // Re-render once per second while open so countdowns tick down live.
+  const [tick, setTick] = useState(0);
   useEffect(() => {
-    if (!open || snapshot) return;
-    void fetch('/api/health/models')
-      .then((r) => r.json())
-      .then(setSnapshot)
-      .catch(() => setSnapshot({ models: {} }));
-  }, [open, snapshot]);
+    if (!open) return;
+    const t = setInterval(() => setTick((v) => v + 1), 1000);
+    return () => clearInterval(t);
+  }, [open]);
+  // Freshen from the server when the section opens (WS push covers the rest).
+  useEffect(() => {
+    if (open) void refreshHealth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
-  const rows = snapshot
-    ? Object.entries(snapshot.models).sort(([a], [b]) => a.localeCompare(b))
-    : [];
+  const rows = Object.entries(modelHealth).sort(([a], [b]) => a.localeCompare(b));
   const failing = rows.filter(([, h]) => h.status === 'failing').length;
-  const cooling = rows.filter(([, h]) => h.cooldownUntil && h.cooldownUntil > Date.now()).length;
+  const now = Date.now();
+  const cooling = rows.filter(([, h]) => h.cooldownUntil && h.cooldownUntil > now).length;
+  const [probing, setProbing] = useState(false);
 
   const fmtAge = (ts: number) => {
     if (!ts) return 'never';
-    const s = Math.round((Date.now() - ts) / 1000);
+    const s = Math.round((now - ts) / 1000);
     if (s < 60) return `${s}s ago`;
     if (s < 3600) return `${Math.round(s / 60)}m ago`;
     return `${Math.round(s / 3600)}h ago`;
   };
+  /** Precise m:ss countdown — the live value the user watches hit zero. */
   const fmtCooldown = (until?: number) => {
     if (!until) return null;
-    const remain = Math.round((until - Date.now()) / 1000);
+    const remain = Math.max(0, Math.round((until - now) / 1000));
     if (remain <= 0) return null;
-    return remain < 60 ? `${remain}s` : `${Math.ceil(remain / 60)}m`;
+    const m = Math.floor(remain / 60);
+    const s = remain % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
   };
 
   return (
@@ -346,8 +346,7 @@ function ModelHealthTable() {
       </button>
       {open && (
         <div className="settings-logs-body">
-          {!snapshot && <div className="ac-note">Loading health data…</div>}
-          {snapshot && rows.length === 0 && (
+          {rows.length === 0 && (
             <div className="ac-note">
               No probes recorded yet — the monitor runs at startup and every 10 minutes.
             </div>
@@ -366,6 +365,10 @@ function ModelHealthTable() {
               <tbody>
                 {rows.map(([model, h]) => {
                   const coolingLeft = fmtCooldown(h.cooldownUntil);
+                  // Cooldown deadline passed but the status still says failing:
+                  // the automatic expiry probe is running right now.
+                  const expiring =
+                    h.cooldownUntil != null && h.cooldownUntil <= now && h.status === 'failing';
                   return (
                     <tr key={model}>
                       <td className="health-model" title={model}>
@@ -375,7 +378,7 @@ function ModelHealthTable() {
                         <span
                           className={`model-health-dot ${h.status === 'healthy' ? 'ok' : h.status === 'failing' ? 'failing' : 'unknown'}`}
                         />
-                        {h.consecutiveFailures > 1 && (
+                        {(h.consecutiveFailures ?? 0) > 1 && (
                           <span className="health-fails" title="consecutive failures">
                             ×{h.consecutiveFailures}
                           </span>
@@ -388,7 +391,20 @@ function ModelHealthTable() {
                         {fmtAge(h.lastChecked)}
                         {h.lastLatencyMs != null ? ` · ${h.lastLatencyMs}ms` : ''}
                       </td>
-                      <td className="health-dim">{coolingLeft ? `${coolingLeft} left` : '—'}</td>
+                      <td
+                        className={`health-dim${coolingLeft ? ' health-countdown' : ''}`}
+                        title={
+                          coolingLeft
+                            ? 'Cooldown — auto routing skips this model until it expires, then it is re-probed automatically'
+                            : undefined
+                        }
+                      >
+                        {coolingLeft
+                          ? `${coolingLeft} left`
+                          : expiring
+                            ? 're-probing…'
+                            : '—'}
+                      </td>
                       <td className="health-err" title={h.lastError}>
                         {h.lastError ? h.lastError.slice(0, 60) : '—'}
                       </td>
@@ -399,16 +415,19 @@ function ModelHealthTable() {
             </table>
           )}
           <button
-            className="settings-logs-clear"
+            className="settings-reprobe"
+            disabled={probing}
             onClick={() => {
-              setSnapshot(null);
+              setProbing(true);
               void fetch('/api/health/models/refresh', { method: 'POST' })
-                .then((r) => r.json())
-                .then((j) => setSnapshot(j))
-                .catch(() => setSnapshot({ models: {} }));
+                .then(() => refreshHealth())
+                .catch(() => {
+                  /* keep last known */
+                })
+                .finally(() => setProbing(false));
             }}
           >
-            Re-probe all models now
+            {probing ? 'Probing…' : 'Re-probe all models now'}
           </button>
         </div>
       )}
@@ -430,6 +449,7 @@ function LogsSection() {
         </span>
       </button>
       {open && (
+        <>
         <div className="settings-logs-body">
           {activity.length === 0 && <div className="ac-note">No activity yet.</div>}
           {activity.slice(0, 100).map((a, i) => (
@@ -443,6 +463,7 @@ function LogsSection() {
               )}
             </div>
           ))}
+        </div>
           {activity.length > 0 && (
             <button
               className="settings-logs-clear"
@@ -451,8 +472,113 @@ function LogsSection() {
               <Trash2 size={11} /> Clear log
             </button>
           )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Selective data wipe — lets the user choose which data categories to keep
+ * before wiping the rest. Used for a clean reinstall without losing
+ * everything (e.g. keep settings but wipe history + memory).
+ */
+const DATA_CATEGORIES = [
+  { id: 'settings', label: 'Settings', desc: 'Theme, model prefs, autonomy mode' },
+  { id: 'skills', label: 'Skills', desc: 'Built-in and imported skills' },
+  { id: 'checkpoints', label: 'Checkpoints', desc: 'File snapshots before edits' },
+  { id: 'permissions', label: 'Permissions', desc: 'Allow/deny command rules' },
+  { id: 'memory', label: 'Memory', desc: 'Per-project agent memory' },
+  { id: 'history', label: 'History', desc: 'Task transcripts and activity' },
+  { id: 'health', label: 'Health', desc: 'Model health probe results' },
+  { id: 'workspaces', label: 'Workspaces', desc: 'Registered project list' },
+  { id: 'analytics', label: 'Analytics', desc: 'Token usage stats' },
+  { id: 'chat-threads', label: 'Chat threads', desc: 'Saved conversations' },
+] as const;
+
+function DataWipeSection() {
+  const [open, setOpen] = useState(false);
+  const [wiping, setWiping] = useState(false);
+  const [keep, setKeep] = useState<Set<string>>(new Set());
+  const [wipeConfirm, setWipeConfirm] = useState(false);
+  const wipeData = useStore((s) => s.wipeData);
+
+  return (
+    <div className="settings-wipe">
+      <button className="settings-logs-head" onClick={() => setOpen((v) => !v)}>
+        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        <strong style={{ fontSize: 12 }}>Wipe Data</strong>
+        <span className="ac-process-badge" style={{ color: 'var(--err)' }}>
+          destructive
+        </span>
+      </button>
+      {open && (
+        <div className="settings-wipe-body">
+          <p className="ac-note" style={{ marginBottom: 8 }}>
+            Select what to <strong>keep</strong> — everything else will be permanently deleted.
+            This is like a clean reinstall without losing your essentials.
+          </p>
+          <div className="settings-wipe-grid">
+            {DATA_CATEGORIES.map((cat) => (
+              <label key={cat.id} className="settings-wipe-item">
+                <input
+                  type="checkbox"
+                  checked={keep.has(cat.id)}
+                  onChange={(e) => {
+                    const next = new Set(keep);
+                    if (e.target.checked) next.add(cat.id); else next.delete(cat.id);
+                    setKeep(next);
+                  }}
+                />
+                <span className="settings-wipe-label">{cat.label}</span>
+                <span className="settings-wipe-desc">{cat.desc}</span>
+              </label>
+            ))}
+          </div>
+          <div className="settings-wipe-actions">
+            <button
+              className="settings-wipe-keepall"
+              onClick={() => setKeep(new Set(DATA_CATEGORIES.map((c) => c.id)))}
+            >
+              Keep all
+            </button>
+            <button
+              className="settings-wipe-keepnone"
+              onClick={() => setKeep(new Set())}
+            >
+              Keep none
+            </button>
+            <div style={{ flex: 1 }} />
+            <GlassButton
+              className="settings-wipe-btn btn-glass glass"
+              disabled={wiping}
+              onClick={() => setWipeConfirm(true)}
+            >
+              <Trash2 size={12} />
+              <span>{wiping ? 'Wiping…' : 'Wipe selected data'}</span>
+            </GlassButton>
+          </div>
         </div>
       )}
+      <ConfirmModal
+        open={wipeConfirm}
+        title="Permanently delete data?"
+        message={`This will remove ${keep.size === 0 ? 'ALL data' : `everything except ${[...keep].join(', ')}`} from ~/.aether. This cannot be undone.`}
+        confirmLabel="Delete permanently"
+        cancelLabel="Cancel"
+        danger
+        onConfirm={async () => {
+          setWipeConfirm(false);
+          setWiping(true);
+          try {
+            await wipeData([...keep]);
+            setOpen(false);
+          } finally {
+            setWiping(false);
+          }
+        }}
+        onCancel={() => setWipeConfirm(false)}
+      />
     </div>
   );
 }

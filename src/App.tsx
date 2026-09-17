@@ -9,8 +9,8 @@ import {
   Undo2,
   Redo2,
 } from 'lucide-react';
-import { AetherMark } from './lib/AetherMark';
 import { useStore } from './lib/store';
+import { AetherMark } from './lib/AetherMark';
 import { Sidebar } from './components/Sidebar';
 import { TabBar } from './components/TabBar';
 import { EditorView } from './components/EditorView';
@@ -222,7 +222,11 @@ export default function App() {
           />
         </div>
         <span className="logo">
-          <AetherMark size={16} /> Aether
+          {/* AetherMark (chip-backed SVG) — the old stroke-only mark collapsed
+              to a faint ghost at 16px, and the icon PNG itself is dark-on-dark;
+              this variant keeps a visible silhouette on the dark titlebar. */}
+          <AetherMark size={16} className="logo-icon" />
+          Aether
         </span>
         <span className="logo-tagline">Build with agents.</span>
         <div className="hist-buttons">

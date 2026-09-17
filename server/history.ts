@@ -18,6 +18,11 @@ export class HistoryStore {
   private dir = path.join(DATA_DIR, 'history');
   private timers = new Map<string, NodeJS.Timeout>();
 
+  /** Statuses that mean the task genuinely finished. Anything else found on
+   *  disk at boot (running / planning / queued / awaiting-* / paused) died
+   *  with the previous process. */
+  private static readonly TERMINAL = new Set(['completed', 'failed', 'cancelled']);
+
   constructor() {
     fs.mkdirSync(this.dir, { recursive: true });
   }
@@ -76,5 +81,35 @@ export class HistoryStore {
     } catch {
       return null;
     }
+  }
+
+  /** Boot-time sweep: any task still persisted in a non-terminal state died
+   *  with the previous process — rewrite it as failed BEFORE the restore path,
+   *  REST handlers, or any client fetch can observe it. This guarantees no
+   *  reader (now or later) can inherit a running ghost from raw history
+   *  files, not just the in-memory copies. Returns how many were repaired. */
+  async failInterrupted(): Promise<number> {
+    let ids: string[] = [];
+    try {
+      ids = await fsp.readdir(this.dir);
+    } catch {
+      return 0; // no history yet
+    }
+    let repaired = 0;
+    for (const id of ids.filter((f) => f.endsWith('.json'))) {
+      try {
+        const file = path.join(this.dir, id);
+        const data = JSON.parse(await fsp.readFile(file, 'utf8')) as PersistedTask;
+        if (!data?.task || HistoryStore.TERMINAL.has(data.task.status)) continue;
+        data.task.status = 'failed';
+        data.task.error = data.task.error ?? 'Interrupted by restart';
+        data.task.updatedAt = Date.now();
+        await fsp.writeFile(file, JSON.stringify(data), 'utf8');
+        repaired++;
+      } catch {
+        /* skip corrupt — it reads as null everywhere anyway */
+      }
+    }
+    return repaired;
   }
 }

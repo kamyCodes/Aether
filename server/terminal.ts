@@ -2,6 +2,10 @@ import { spawn } from 'node:child_process';
 /**
  * TerminalManager — PTY session lifecycle (node-pty) for the integrated
  * terminal panel. One process per session, streamed over the WebSocket bus.
+ * Tab metadata (title/cwd/workspace) persists to DATA_DIR/terminals.json so
+ * the tab strip survives an app restart — the shells themselves are respawned
+ * fresh (PTY processes cannot survive the backend), with scrollback restored
+ * from the client's replay cache where available.
  */
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
@@ -10,8 +14,10 @@ import { createRequire } from 'node:module';
  *  require.resolve would throw ReferenceError and silently disable the PTY. */
 const require = createRequire(import.meta.url);
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { DATA_DIR } from './dataDir.js';
 
 /** Structured record of one command executed in an interactive session. */
 export interface TermCommand {
@@ -28,6 +34,10 @@ export interface TermSession {
   id: string;
   title: string;
   cwd: string;
+  /** Workspace this terminal was opened for — terminals are scoped per
+   *  workspace session so switching projects never leaks another project's
+   *  shells into the tab strip. */
+  workspaceId?: string;
   emitter: EventEmitter;
   write(data: string): void;
   resize(cols: number, rows: number): void;
@@ -46,11 +56,42 @@ export interface TermSession {
 const MAX_HISTORY = 200;
 const MAX_SCROLLBACK = 120_000; // chars of raw output kept per session
 
+/** Persisted tab entry — metadata only; shells are respawned after restart. */
+interface PersistedTab {
+  id: string;
+  title: string;
+  cwd: string;
+  workspaceId?: string;
+  createdAt: number;
+}
+const TABS_FILE = () => path.join(DATA_DIR, 'terminals.json');
+const MAX_PERSISTED_TABS = 60;
+
 export class TerminalManager {
   sessions = new Map<string, TermSession>();
   private ptyAvailable = false;
   /** dir where one-shot shell-integration init files live */
   private initDir = path.join(os.tmpdir(), 'aether-shell-integration');
+  /** Tab metadata of sessions that died with the previous backend — served
+   *  to clients so the tab strip survives an app restart. Cleared once the
+   *  client confirms revival (or the tabs are dismissed). */
+  private deadTabs: PersistedTab[] = [];
+  private persistTimer: NodeJS.Timeout | null = null;
+
+  /** Read the persisted tab metadata (boot) into the dead-tab stash. */
+  private loadTabsFile() {
+    try {
+      const raw = JSON.parse(fs.readFileSync(TABS_FILE(), 'utf8')) as { tabs?: PersistedTab[] };
+      this.deadTabs = Array.isArray(raw.tabs) ? raw.tabs.slice(-MAX_PERSISTED_TABS) : [];
+    } catch {
+      this.deadTabs = []; // no file yet, or corrupt
+    }
+  }
+
+  /** Tabs recorded by the previous run — metadata for reviving the strip. */
+  loadPersistedTabs(): PersistedTab[] {
+    return [...this.deadTabs];
+  }
 
   constructor() {
     try {
@@ -64,9 +105,78 @@ export class TerminalManager {
     } catch {
       /* tmp */
     }
+    this.loadTabsFile();
+    // Final flush: the backend can be killed (Electron quit, crash) before
+    // the 400ms persist debounce fires — 'exit' runs synchronously, so the
+    // last tab strip state always reaches disk.
+    process.on('exit', () => this.flushTabsNow());
   }
 
-  create(cwd: string, title?: string): TermSession {
+  /** Synchronous write of the current tab metadata (used at process exit). */
+  private flushTabsNow() {
+    const live: PersistedTab[] = [...this.sessions.values()].map((s) => ({
+      id: s.id,
+      title: s.title,
+      cwd: s.cwd,
+      workspaceId: s.workspaceId,
+      createdAt: Date.now(),
+    }));
+    const liveIds = new Set(live.map((t) => t.id));
+    const dead = this.deadTabs.filter((t) => !liveIds.has(t.id));
+    const tabs = [...dead, ...live].slice(-MAX_PERSISTED_TABS);
+    try {
+      fs.writeFileSync(TABS_FILE(), JSON.stringify({ tabs, savedAt: Date.now() }), 'utf8');
+    } catch {
+      /* best-effort — process is exiting */
+    }
+  }
+
+  /** Persist live sessions' tab metadata — called on create/cwd/kill so a
+   *  crash or restart restores the strip as it last looked. Not-yet-revived
+   *  dead tabs are preserved in the file until the client acks their fate
+   *  (otherwise the first create after a restart would erase them). */
+  persistTabs() {
+    if (this.persistTimer) clearTimeout(this.persistTimer);
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = null;
+      const live: PersistedTab[] = [...this.sessions.values()]
+        .slice(-MAX_PERSISTED_TABS)
+        .map((s) => ({
+          id: s.id,
+          title: s.title,
+          cwd: s.cwd,
+          workspaceId: s.workspaceId,
+          createdAt: Date.now(),
+        }));
+      const liveIds = new Set(live.map((t) => t.id));
+      const dead = this.deadTabs.filter((t) => !liveIds.has(t.id));
+      const tabs = [...dead, ...live].slice(-MAX_PERSISTED_TABS);
+      const file = TABS_FILE();
+      const tmp = `${file}.${process.pid}.tmp`;
+      try {
+        fs.writeFileSync(tmp, JSON.stringify({ tabs, savedAt: Date.now() }), 'utf8');
+        fs.renameSync(tmp, file);
+      } catch {
+        /* best-effort */
+      }
+    }, 400);
+  }
+
+  /** Merge revived tabs back into the dead-tab stash and rewrite the file
+   *  (called by the client after a successful revive flow). */
+  async replaceDeadTabs(tabs: PersistedTab[]) {
+    this.deadTabs = tabs.slice(-MAX_PERSISTED_TABS);
+    const file = TABS_FILE();
+    const tmp = `${file}.${process.pid}.tmp`;
+    try {
+      await fsp.writeFile(tmp, JSON.stringify({ tabs: this.deadTabs, savedAt: Date.now() }), 'utf8');
+      await fsp.rename(tmp, file);
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  create(cwd: string, title?: string, workspaceId?: string): TermSession {
     const id = Math.random().toString(36).slice(2, 10);
     const emitter = new EventEmitter();
     let proc: ReturnType<typeof spawn> | import('node-pty').IPty | null = null;
@@ -77,6 +187,7 @@ export class TerminalManager {
       id,
       title: title ?? `Terminal ${this.sessions.size + 1}`,
       cwd,
+      workspaceId,
       emitter,
       history: [],
       commands: [],
@@ -168,7 +279,14 @@ export class TerminalManager {
             }
           };
           p.onData((d) => this.ingest(session, d));
-          p.onExit(() => emitter.emit('exit'));
+          p.onExit(() => {
+            emitter.emit('exit');
+            // Shell died (user typed exit, crash): drop the tab from the
+            // persisted strip too, so a restart doesn't resurrect a tab the
+            // user closed inside the shell.
+            this.sessions.delete(session.id);
+            this.persistTabs();
+          });
         })
         .catch(() => {
           this.fallbackSpawn(session, shell, cwd, spawnArgs, (p) => (proc = p));
@@ -178,6 +296,7 @@ export class TerminalManager {
     }
 
     this.sessions.set(id, session);
+    this.persistTabs();
     return session;
   }
 
@@ -335,6 +454,7 @@ export class TerminalManager {
     if (s) {
       s.kill();
       this.sessions.delete(id);
+      this.persistTabs();
     }
   }
 
@@ -362,6 +482,16 @@ export class TerminalManager {
         resolve({ code: code ?? 1, stdout: stdout.slice(-20000), stderr: stderr.slice(-20000) });
       });
     });
+  }
+
+  /** Sessions belonging to one workspace (per-workspace tab strip). */
+  listForWorkspace(workspaceId: string) {
+    return [...this.sessions.values()].filter((s) => s.workspaceId === workspaceId);
+  }
+
+  /** Kill every terminal opened for a workspace (called on workspace close). */
+  killForWorkspace(workspaceId: string) {
+    for (const s of this.listForWorkspace(workspaceId)) this.kill(s.id);
   }
 
   killAll() {

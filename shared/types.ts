@@ -139,6 +139,9 @@ export interface StreamStatus {
   /** Retry attempt, e.g. 1 of 3. */
   attempt?: number;
   maxAttempts?: number;
+  /** Task the status belongs to — lets the UI scope stall notices to the
+   *  workspace/chat actually showing that run instead of globally. */
+  taskId?: string;
   ts: number;
 }
 
