@@ -1,11 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Check,
   X,
   FolderOpen,
   Server,
-  Database,
   FolderPlus,
   ClipboardCheck,
   AlertTriangle,
@@ -16,10 +15,8 @@ import { get, post } from '../lib/api';
 
 /**
  * First-run setup wizard — blocks the IDE until setup completes or the user
- * explicitly defers. Every "test" hits the real backend endpoint which makes
- * the real network/DB call and returns the actual result. All values are
- * written through the app's single settings surface (/api/setup/complete →
- * SettingsStore) — no modal-only config file.
+ * explicitly defers. OmniRoute is configured automatically (no manual API key
+ * entry). Database is embedded SQLite (no configuration needed).
  */
 
 interface StepCheck {
@@ -28,12 +25,11 @@ interface StepCheck {
 }
 interface SetupState {
   complete: boolean;
-  skipped: string[];
+  skipped: string[] | undefined;
   recovery: { reason: string; detail: string; backups: string[] } | null;
   dataDir: string;
   dataDirWritable: boolean | null;
   defaults: { dataDir: string; omniBaseUrl: string; defaultProjectsDir: string };
-  dbConfigured: boolean;
 }
 interface CompletionResult {
   ok: boolean;
@@ -42,17 +38,10 @@ interface CompletionResult {
 
 const STEPS = [
   { key: 'data', title: 'Welcome & data location', icon: FolderOpen },
-  { key: 'omni', title: 'Model provider', icon: Server },
-  { key: 'db', title: 'Database', icon: Database },
+  { key: 'omni', title: 'AI models', icon: Server },
   { key: 'workspace', title: 'Projects folder', icon: FolderPlus },
   { key: 'review', title: 'Review & finish', icon: ClipboardCheck },
 ] as const;
-
-function maskKey(k: string): string {
-  if (!k) return '(none)';
-  if (k.length <= 8) return '••••';
-  return `••••${k.slice(-4)}`;
-}
 
 /** One validation result row (used inline + in the review checklist). */
 function CheckRow({ ok, detail }: { ok: boolean; detail: string }) {
@@ -64,32 +53,25 @@ function CheckRow({ ok, detail }: { ok: boolean; detail: string }) {
   );
 }
 
-interface SetupHelp {
-  omni: { steps: string[]; docsUrl: string };
-  db: { steps: string[]; docsUrl: string };
-}
-
 export function SetupWizard({ onDone }: { onDone: () => void }) {
   const [state, setState] = useState<SetupState | null>(null);
-  const [help, setHelp] = useState<SetupHelp | null>(null);
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
 
   // Step state
   const [dataDir, setDataDir] = useState('');
   const [omniUrl, setOmniUrl] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [connStr, setConnStr] = useState('postgresql://postgres@localhost:5432/aether_db');
   const [wsDir, setWsDir] = useState('');
-  const [ackDb, setAckDb] = useState(false);
   const [skipped, setSkipped] = useState<string[]>([]);
 
   // Per-step live results
   const [ddCheck, setDdCheck] = useState<StepCheck | null>(null);
   const [omniCheck, setOmniCheck] = useState<StepCheck | null>(null);
-  const [dbCheck, setDbCheck] = useState<StepCheck | null>(null);
   const [wdCheck, setWdCheck] = useState<StepCheck | null>(null);
   const [final, setFinal] = useState<CompletionResult | null>(null);
+
+  // OmniRoute auto-setup status
+  const [omniStatus, setOmniStatus] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle');
 
   useEffect(() => {
     void (async () => {
@@ -103,9 +85,6 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
         setState(null);
       }
     })();
-    get<SetupHelp>('/setup/help')
-      .then(setHelp)
-      .catch(() => setHelp(null));
   }, []);
 
   const pickFolder = useCallback(async (current: string): Promise<string | null> => {
@@ -136,28 +115,24 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
       setBusy(false);
     }
   };
+
   const runOmniCheck = async () => {
     setBusy(true);
     setOmniCheck(null);
+    setOmniStatus('testing');
     try {
-      setOmniCheck(await post<StepCheck>('/setup/check/omni', { baseUrl: omniUrl, apiKey }));
+      // Test the auto-configured OmniRoute endpoint
+      const result = await post<StepCheck>('/setup/check/omni', { baseUrl: omniUrl, apiKey: '' });
+      setOmniCheck(result);
+      setOmniStatus(result.ok ? 'ok' : 'fail');
     } catch (e) {
       setOmniCheck({ ok: false, detail: e instanceof Error ? e.message : String(e) });
+      setOmniStatus('fail');
     } finally {
       setBusy(false);
     }
   };
-  const runDbCheck = async () => {
-    setBusy(true);
-    setDbCheck(null);
-    try {
-      setDbCheck(await post<StepCheck>('/setup/check/database', { connectionString: connStr }));
-    } catch (e) {
-      setDbCheck({ ok: false, detail: e instanceof Error ? e.message : String(e) });
-    } finally {
-      setBusy(false);
-    }
-  };
+
   const runWsCheck = async () => {
     setBusy(true);
     setWdCheck(null);
@@ -176,8 +151,7 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
     try {
       const r = await post<CompletionResult>('/setup/complete', {
         dataDir,
-        omni: { baseUrl: omniUrl, apiKey },
-        database: { mode: 'existing', connectionString: connStr },
+        omni: { baseUrl: omniUrl, apiKey: '' },
         workspace: { defaultDir: wsDir },
         skipped,
       });
@@ -222,18 +196,16 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
     );
   }
 
-  // API key and a database connection are mandatory gates: a validated key
-  // check (or an explicit ack to continue broken) and a DB check / ack.
+  // Can proceed: step 0 requires ddCheck OK; step 1 requires omniCheck OK or auto-setup;
+  // step 2 requires wdCheck OK; step 3 requires final OK.
   const canNext =
     step === 0
       ? !!ddCheck?.ok
       : step === 1
-        ? !!omniCheck?.ok
+        ? !!omniCheck?.ok || omniStatus === 'ok'
         : step === 2
-          ? !!dbCheck?.ok || ackDb
-          : step === 3
-            ? !!wdCheck?.ok
-            : !!final?.ok;
+          ? !!wdCheck?.ok
+          : !!final?.ok;
 
   return createPortal(
     <div className="modal-overlay setup-overlay">
@@ -295,103 +267,32 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
           {step === 1 && (
             <>
               <h3>
-                <Server size={13} /> Model provider
+                <Server size={13} /> AI models
               </h3>
               <p className="setup-note">
-                Aether talks to an OpenAI-compatible gateway. The default points at a local
-                OmniRoute instance. <strong>An API key is required</strong> — without it the gateway
-                rejects every request.
+                OmniRoute is installed and configured automatically — it provides free models
+                out of the box. No API key or manual setup required.
               </p>
               <div className="setup-field">
-                <label>Endpoint URL</label>
-                <input
-                  value={omniUrl}
-                  onChange={(e) => {
-                    setOmniUrl(e.target.value);
-                    setOmniCheck(null);
-                  }}
-                />
+                <label>Gateway endpoint</label>
+                <input value={omniUrl} readOnly style={{ opacity: 0.7 }} />
               </div>
-              <div className="setup-field">
-                <label>API key (required)</label>
-                <input
-                  type="password"
-                  value={apiKey}
-                  placeholder="sk-…"
-                  onChange={(e) => {
-                    setApiKey(e.target.value);
-                    setOmniCheck(null);
-                    setSkipped((s) => s.filter((x) => x !== 'omni'));
-                  }}
-                />
-              </div>
-              {help && (
-                <details className="setup-help">
-                  <summary>How do I get an API key?</summary>
-                  <ol>
-                    {help.omni.steps.map((s2) => (
-                      <li key={s2}>{s2}</li>
-                    ))}
-                  </ol>
-                </details>
-              )}
               {omniCheck && <CheckRow {...omniCheck} />}
               <div className="choice-row">
-                <button disabled={busy || !apiKey.trim()} onClick={() => void runOmniCheck()}>
-                  {busy ? 'Testing…' : 'Test connection'}
+                <button
+                  disabled={busy}
+                  onClick={() => void runOmniCheck()}
+                >
+                  {busy ? <Loader2 size={12} className="spin" /> : null}
+                  {omniStatus === 'testing' ? 'Testing…' : omniStatus === 'ok' ? 'Re-test connection' : 'Test connection'}
                 </button>
               </div>
-            </>
-          )}{' '}
-          {step === 2 && (
-            <>
-              <h3>
-                <Database size={13} /> Database
-              </h3>
-              <p className="setup-note">
-                PostgreSQL powers task history, usage dashboards, and project memory.{' '}
-                <strong>A connection is required</strong> — point Aether at an existing server (or
-                install one; it takes a few minutes).
+              <p className="setup-note" style={{ fontSize: 11, marginTop: 8 }}>
+                You can add your own API keys for paid models later in Settings.
               </p>
-              <div className="setup-field">
-                <label>Connection string</label>
-                <input
-                  value={connStr}
-                  onChange={(e) => {
-                    setConnStr(e.target.value);
-                    setDbCheck(null);
-                  }}
-                />
-              </div>
-              {help && (
-                <details className="setup-help">
-                  <summary>Don't have PostgreSQL? Install it here.</summary>
-                  <ol>
-                    {help.db.steps.map((s2) => (
-                      <li key={s2}>{s2}</li>
-                    ))}
-                  </ol>
-                </details>
-              )}
-              {dbCheck && <CheckRow {...dbCheck} />}
-              <div className="choice-row">
-                <button disabled={busy} onClick={() => void runDbCheck()}>
-                  {busy ? 'Running query…' : 'Test (runs a real query)'}
-                </button>
-              </div>
-              {dbCheck && !dbCheck.ok && (
-                <label className="setup-ack">
-                  <input
-                    type="checkbox"
-                    checked={ackDb}
-                    onChange={(e) => setAckDb(e.target.checked)}
-                  />
-                  Continue anyway — I'll fix this later (history & usage stay off)
-                </label>
-              )}
             </>
           )}
-          {step === 3 && (
+          {step === 2 && (
             <>
               <h3>
                 <FolderPlus size={13} /> Default projects folder
@@ -429,7 +330,7 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
               </div>
             </>
           )}
-          {step === 4 && (
+          {step === 3 && (
             <>
               <h3>
                 <ClipboardCheck size={13} /> Review
@@ -441,15 +342,11 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
                 </div>
                 <div>
                   <span>Model gateway</span>
-                  <code>{omniUrl}</code>
-                </div>
-                <div>
-                  <span>API key</span>
-                  <code>{maskKey(apiKey)}</code>
+                  <code>{omniUrl} (auto-configured)</code>
                 </div>
                 <div>
                   <span>Database</span>
-                  <code>{connStr.replace(/:[^:@/]+@/, ':••••@')}</code>
+                  <code>SQLite (embedded, no setup needed)</code>
                 </div>
                 <div>
                   <span>Projects folder</span>
@@ -476,7 +373,7 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
                   {!final.ok && (
                     <p className="setup-note warn">
                       Some checks failed. You can still enter the IDE — failed features show their
-                      “not configured” state — or go back and fix them.
+                      "not configured" state — or go back and fix them.
                     </p>
                   )}
                   {!final.ok && (

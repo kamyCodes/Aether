@@ -4,6 +4,6 @@
  * its own bundled copy on boot and warns on drift (a cached tab talking to a
  * freshly updated backend — spec Section 4.6). Bump with each release.
  */
-export const APP_VERSION = '0.1.1';
+export const APP_VERSION = '0.1.2';
 /** Schema of the settings.json file (see server/settings.ts). */
 export const SETTINGS_SCHEMA = 1;

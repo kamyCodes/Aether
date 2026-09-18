@@ -15,8 +15,8 @@ The agent talks to any **OpenAI-compatible model gateway** (Aether ships with su
 | 🖥 **Real desktop IDE** | Monaco editor, file tree, git panel, integrated terminal (node-pty), live preview, code map — panels that resize and remember. |
 | 🤖 **Autonomous agent, permission-gated** | The agent plans, calls tools (edit / shell / search / git), and streams its work over WebSockets. Every tool call passes an allow/deny engine; approvals persist across restarts. |
 | 🔒 **Local-first by design** | The gateway endpoint, ports, and data directory are the only configuration. Keys live in local settings, are masked in logs, and a "mock guard" refuses to run against fake gateways in production. |
-| 🧠 **Project memory & history** | Optional PostgreSQL backing for task history, usage dashboards, and project memory. Skip it and everything else still works. |
-| 🪄 **Setup that actually tests** | The first-run wizard doesn't take your word for anything: it write-probes the data directory, makes a real `/models` call, runs a real SQL query, and shows a per-item pass/fail checklist. |
+| 🧠 **Project memory & history** | Embedded SQLite for task history, usage dashboards, and project memory — zero configuration. |
+| 🪄 **Setup that actually tests** | The first-run wizard write-probes the data directory, auto-installs and tests OmniRoute, and shows a per-item pass/fail checklist. No manual API key or database configuration required. |
 | 🛡 **Hardened by an audit gate** | CI scans every commit for hardcoded paths/ports, secrets, leftover mocks, and dead flags. Nothing ships without an explicit, documented allowlist entry. |
 
 ## Quickstart
@@ -28,6 +28,16 @@ Grab the latest installer from [Releases](https://github.com/kamyCodes/Aether/re
 - Per-user install to `%LOCALAPPDATA%\Programs\Aether` (no admin needed), with optional per-machine install.
 - Desktop + Start Menu shortcuts; standard uninstaller in Apps & Features.
 - Your data is **never** in the install directory: it lives in `%APPDATA%\Aether` (override with `AETHER_HOME`), and the uninstaller asks before touching it — never deletes silently.
+
+### First-run flow
+
+On first launch, Aether automatically:
+1. Installs [OmniRoute](https://www.npmjs.com/package/omniroute) (the AI model gateway) globally if not already present.
+2. Configures a free pollinations provider (no API key needed) and creates an inference API key.
+3. Spawns OmniRoute as a child process that lives as long as Aether is running.
+4. Opens an embedded SQLite database at `~/.aether/aether.db` (no Postgres, no Docker).
+
+The setup wizard only asks you to confirm the data directory and projects folder. Everything else is automated.
 
 ### Run from source
 

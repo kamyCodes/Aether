@@ -4,6 +4,8 @@
  * Usage: node scripts/build-windows-installer.mjs [--dir]  (--dir = unpacked only, faster smoke test)
  */
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -12,6 +14,17 @@ const step = (m) => console.log(`\n=== ${m} ===`);
 
 function run(cmd) {
   execSync(cmd, { stdio: 'inherit', cwd: root });
+}
+
+/** Compute SHA-256 hash of a file (async, streaming). */
+function sha256File(file) {
+  return new Promise((resolve, reject) => {
+    const hash = createHash('sha256');
+    const stream = createReadStream(file);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(hash.digest('hex')));
+  });
 }
 
 step('archive previous installers');
@@ -56,6 +69,9 @@ run(`npx electron-builder --win nsis${extra}`);
 step('sha256 checksums');
 run('node scripts/generate-checksum.mjs');
 
+step('stable "latest" download copy');
+await makeLatestCopy();
+
 step('release notes');
 run('node scripts/generate-release-notes.mjs');
 
@@ -63,8 +79,68 @@ step('done — output in release/');
 console.log('Installer:  release/Aether-Setup-<version>.exe');
 console.log('Blockmap:   release/Aether-Setup-<version>.exe.blockmap (for future delta updates)');
 console.log('Checksum:   release/Aether-Setup-<version>.exe.sha256 (publish this beside the exe)');
+console.log('Latest:     release/Aether-Setup-latest.exe + .sha256 (fixed-name copy for the website\'s static download link)');
 console.log('Changelog:  CHANGELOG.md (entry added/verified for this version)');
 console.log('Archives:   archives/ (previous-version installers kept from earlier builds)');
+
+/**
+ * Copy the versioned installer to a fixed, version-less name
+ * Aether-Setup-latest.exe (+ matching .sha256) in release/.
+ *
+ * The website's download button points at
+ *   github.com/kamyCodes/Aether/releases/latest/download/Aether-Setup-latest.exe
+ * which resolves to whatever release is newest — but only if an asset with
+ * that literal name exists in it. Producing this copy on every build means
+ * the website link never needs a version bump again.
+ *
+ * The copy carries the versioned file's exact content (identical bytes, size
+ * and hash — only the name differs), and gets its own .sha256 record naming
+ * Aether-Setup-latest.exe so `sha256sum -c` / certutil verification of the
+ * latest-named download matches its filename.
+ */
+function makeLatestCopy() {
+  return new Promise((resolve, reject) => {
+    const releaseDir = path.join(root, 'release');
+    if (!fs.existsSync(releaseDir)) {
+      console.error('[latest-copy] release/ not found — skipping (dir-only build?)');
+      resolve();
+      return;
+    }
+
+    const versioned = fs
+      .readdirSync(releaseDir)
+      .find((f) => /^Aether-Setup-.+\.exe$/i.test(f) && !/^Aether-Setup-latest\.exe$/i.test(f));
+    if (!versioned) {
+      console.error('[latest-copy] FAIL: no versioned Aether-Setup-*.exe in release/ to copy');
+      reject(new Error('no versioned installer to copy for latest alias'));
+      return;
+    }
+
+    const src = path.join(releaseDir, versioned);
+    const dst = path.join(releaseDir, 'Aether-Setup-latest.exe');
+    fs.copyFileSync(src, dst);
+
+    // .sha256 record for the latest-named copy, in the same sha256sum -c format
+    // generate-checksum.mjs uses (hash + two spaces + bare filename).
+    sha256File(dst)
+      .then((hash) => {
+        fs.writeFileSync(`${dst}.sha256`, `${hash}  Aether-Setup-latest.exe\n`, 'utf8');
+
+        const sizeA = fs.statSync(src).size;
+        const sizeB = fs.statSync(dst).size;
+        if (sizeA !== sizeB || hash.length !== 64) {
+          console.error('[latest-copy] FAIL: copy verification failed (size/hash mismatch)');
+          reject(new Error('latest-copy verification failed'));
+          return;
+        }
+        console.log(`[latest-copy] ${versioned} (${(sizeA / (1024 * 1024)).toFixed(1)} MB) -> Aether-Setup-latest.exe`);
+        console.log(`[latest-copy]   sha256: ${hash}`);
+        console.log('[latest-copy]   wrote:  Aether-Setup-latest.exe.sha256');
+        resolve();
+      })
+      .catch(reject);
+  });
+}
 
 /**
  * Move installer artifacts belonging to any version other than the current

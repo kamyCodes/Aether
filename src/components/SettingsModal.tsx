@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { get } from '../lib/api';
-import { ChevronRight, ChevronDown, Trash2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Trash2, X } from 'lucide-react';
 import { useStore } from '../lib/store';
 import type { AppSettings } from '../../shared/types';
 import { GlassDropdown, GlassButton } from './glass';
@@ -55,6 +55,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-overlay" onMouseDown={onClose}>
       <div className="modal" style={{ width: 640 }} onMouseDown={(e) => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose} aria-label="Close settings" title="Close">
+          <X size={13} />
+        </button>
         <div className="panel-header">Settings</div>
         <div className="modal-results" style={{ padding: 4 }}>
           <div className="settings-form">

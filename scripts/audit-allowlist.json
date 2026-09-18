@@ -19,13 +19,17 @@
       "server/config.ts",
       "scripts/audit-gate.mjs",
       "src/components/SetupWizard.tsx",
-      "server/setup.ts"
+      "server/setup.ts",
+      "scripts/setup-omniroute.ts",
+      "server/omniLifecycle.ts"
     ],
     "S2.loopback-ip": [
       "server/config.ts",
       "electron/main.ts",
       "tests/setupFirstRun.test.ts",
-      "scripts/smoke-packaged.mjs"
+      "scripts/smoke-packaged.mjs",
+      "scripts/setup-omniroute.ts",
+      "server/omniLifecycle.ts"
     ],
     "S3.credential-assignment": [],
     "S3.openai-key-shape": [],
@@ -45,14 +49,24 @@
       "Aether-Skill-Pack/agent-extra-skills/13-accessibility-auditor.md",
       "Aether-Skill-Pack/agent-extra-skills/35-full-app-from-prompt-builder.md"
     ],
-    "S5.not-implemented": ["scripts/audit-gate.mjs"],
+    "S5.not-implemented": [
+      "scripts/audit-gate.mjs"
+    ],
     "S6.dead-branch": [],
-    "S6.feature-env-flag": ["scripts/audit-gate.mjs"],
+    "S6.feature-env-flag": [
+      "scripts/audit-gate.mjs"
+    ],
     "S7.toLocale*": []
   },
   "allowMatches": {
-    "S2.hardcoded-port": ["audit-allowlist"],
-    "S2.localhost": ["audit-allowlist"],
-    "S5.todo-markers": ["xlink:href=\"data:image/png;base64"]
+    "S2.hardcoded-port": [
+      "audit-allowlist"
+    ],
+    "S2.localhost": [
+      "audit-allowlist"
+    ],
+    "S5.todo-markers": [
+      "xlink:href=\"data:image/png;base64"
+    ]
   }
 }

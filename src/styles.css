@@ -1871,6 +1871,7 @@ input, textarea, select {
 }
 @keyframes confirmFadeIn { from { opacity: 0; } to { opacity: 1; } }
 .confirm-dialog {
+  position: relative;
   background: var(--glass-strong);
   -webkit-backdrop-filter: blur(24px) saturate(1.5);
   backdrop-filter: blur(24px) saturate(1.5);
@@ -1888,6 +1889,12 @@ input, textarea, select {
 .confirm-icon-row {
   display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
 }
+.confirm-close {
+  position: absolute; top: 8px; right: 8px;
+  border: none; background: transparent; padding: 4px;
+  color: var(--text-faint); border-radius: 6px;
+}
+.confirm-close:hover { background: var(--hover); color: var(--text); }
 .confirm-icon {
   display: flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; border-radius: 50%;

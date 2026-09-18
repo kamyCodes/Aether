@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import { FileIcon } from '../lib/fileIcons';
 import { promptDialog } from '../lib/dialogs';
 import { openFileWithNativePicker } from './Dialogs';
@@ -157,6 +158,9 @@ export function CommandPalette({
   return (
     <div className="modal-overlay" onMouseDown={onClose}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose} aria-label="Close command palette" title="Close">
+          <X size={13} />
+        </button>
         <input
           ref={inputRef}
           className="modal-input"

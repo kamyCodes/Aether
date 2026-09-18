@@ -1,12 +1,12 @@
-import pg from 'pg';
 /**
  * SQLite database bootstrap and schema management. Owns migrations (the
  * `migrations/` folder) and exposes the raw `dbRows` helper used by dbStore.
  */
+import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PG_HOST, PG_PORT } from './config.js';
+import { DATA_DIR } from './config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -17,182 +17,184 @@ export function projectRoot(): string {
   return path.basename(fromDir) === 'dist-server' ? path.join(fromDir, '..') : fromDir;
 }
 
-/**
- * PostgreSQL connection for Aether. All credentials come from environment
- * variables (or DATABASE_URL) — nothing is hardcoded. If the database is
- * unreachable the app still runs; DB-backed features degrade gracefully and
- * every write is fire-and-forget with logged errors.
- */
+// ---------- SQLite bootstrap ----------
 
-const config: pg.PoolConfig = buildPoolConfig();
+const DB_PATH = path.join(DATA_DIR, 'aether.db');
+let _db: Database.Database | null = null;
 
-/** Pool config from DATABASE_URL or discrete PG* vars (env only — never
- *  hardcoded). Rebuilt at runtime by reconfigurePool() when setup writes new
- *  connection settings. */
-function buildPoolConfig(): pg.PoolConfig {
-  return process.env.DATABASE_URL
-    ? {
-        connectionString: process.env.DATABASE_URL,
-        max: 10,
-        idleTimeoutMillis: 30_000,
-        connectionTimeoutMillis: 5_000,
-      }
-    : {
-        host: PG_HOST,
-        port: PG_PORT,
-        user: process.env.PGUSER ?? 'postgres',
-        password: process.env.PGPASSWORD ?? '',
-        database: process.env.PGDATABASE ?? 'aether_db',
-        max: 10,
-        idleTimeoutMillis: 30_000,
-        connectionTimeoutMillis: 5_000,
-      };
-}
-
-/**
- * Test a connection string WITHOUT touching the live pool — runs a real
- * `SELECT version()` on a throwaway client. Used by the setup wizard's
- * database step (a real query, not a ping).
- */
-export async function testConnectionString(connectionString: string): Promise<string> {
-  const client = new pg.Client({
-    connectionString,
-    connectionTimeoutMillis: 5_000,
-  });
+/** Get or open the SQLite database. Never throws on first call — returns null if unavailable. */
+function getDb(): Database.Database | null {
+  if (_db) return _db;
   try {
-    await client.connect();
-    const r = await client.query('SELECT version() AS v');
-    return String(r.rows[0]?.v ?? 'PostgreSQL');
-  } finally {
-    await client.end().catch(() => {});
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    _db = new Database(DB_PATH);
+    _db.pragma('journal_mode = WAL');
+    _db.pragma('busy_timeout = 5000');
+    _db.pragma('synchronous = NORMAL');
+    return _db;
+  } catch (err) {
+    console.error(`[db] FAILED to open SQLite at ${DB_PATH}: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
   }
 }
 
-/**
- * Swap the live pool to a new connection string: probe first (throwaway
- * client), only then drain and replace. The old pool is ended in the
- * background — in-flight queries finish on it.
- */
-export async function reconfigurePool(connectionString: string): Promise<string> {
-  const version = await testConnectionString(connectionString); // throws on bad target
-  const old = pool;
-  pool = new pg.Pool({
-    connectionString,
-    max: 10,
-    idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 5_000,
-  });
-  dbReady = true;
-  void old.end().catch(() => {});
-  return version;
-}
-
-export let pool = new pg.Pool(config);
-
-/** True when the last health check (or a successful query) succeeded. */
+/** True when the database is open and schema is applied. */
 export let dbReady = false;
 
 export function isDbReady() {
   return dbReady;
 }
 
-/** Check the connection is alive; returns the server version string or null. */
-export async function checkConnection(): Promise<string | null> {
-  try {
-    const r = await pool.query('SELECT version() AS v');
-    dbReady = true;
-    return String(r.rows[0]?.v ?? 'PostgreSQL');
-  } catch (err) {
-    dbReady = false;
-    throw err;
-  }
-}
+// ---------- Schema ----------
 
-const MIGRATIONS_DIR = path.join(projectRoot(), 'migrations');
+/**
+ * All tables, matching the exact Postgres schema from migrations/001_init.sql
+ * but adapted for SQLite types (INTEGER PRIMARY KEY AUTOINCREMENT, TEXT,
+ * REAL, datetime('now')). Idempotent — CREATE TABLE IF NOT EXISTS.
+ */
+const SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+);
 
-/** Idempotent migrations: applied once, tracked in schema_migrations. */
-export async function runMigrations(): Promise<string[]> {
-  await pool.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) UNIQUE NOT NULL,
-    applied_at TIMESTAMP DEFAULT NOW()
-  )`);
-  const applied = new Set(
-    (await pool.query('SELECT name FROM schema_migrations')).rows.map((r) => r.name),
-  );
-  const files = fs
-    .readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith('.sql'))
-    .sort();
-  const ran: string[] = [];
-  for (const file of files) {
-    if (applied.has(file)) continue;
-    const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query(sql);
-      await client.query('INSERT INTO schema_migrations (name) VALUES ($1)', [file]);
-      await client.query('COMMIT');
-      ran.push(file);
-      console.log(`[db] applied migration ${file}`);
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw new Error(
-        `[db] migration ${file} failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    } finally {
-      client.release();
-    }
-  }
-  return ran;
-}
+CREATE TABLE IF NOT EXISTS projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id),
+    name TEXT NOT NULL,
+    root_path TEXT NOT NULL,
+    language TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS projects_root_path_key ON projects (root_path);
+
+CREATE TABLE IF NOT EXISTS files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER REFERENCES projects(id),
+    path TEXT NOT NULL,
+    content TEXT,
+    last_modified TEXT DEFAULT (datetime('now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS files_project_path_key ON files (project_id, path);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER REFERENCES projects(id),
+    started_at TEXT DEFAULT (datetime('now')),
+    ended_at TEXT,
+    status TEXT DEFAULT 'active'
+);
+
+CREATE TABLE IF NOT EXISTS agent_actions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER REFERENCES sessions(id),
+    action_type TEXT NOT NULL,
+    file_id INTEGER REFERENCES files(id),
+    prompt TEXT,
+    result TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS model_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER REFERENCES sessions(id),
+    action_id INTEGER REFERENCES agent_actions(id),
+    model_name TEXT NOT NULL,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    latency_ms INTEGER,
+    cost_usd REAL,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS git_commits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER REFERENCES projects(id),
+    action_id INTEGER REFERENCES agent_actions(id),
+    commit_hash TEXT UNIQUE NOT NULL,
+    branch TEXT,
+    message TEXT,
+    diff_summary TEXT,
+    files_changed INTEGER,
+    additions INTEGER,
+    deletions INTEGER,
+    committed_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_model_usage_session ON model_usage (session_id);
+CREATE INDEX IF NOT EXISTS idx_model_usage_project_time ON model_usage (created_at);
+CREATE INDEX IF NOT EXISTS idx_agent_actions_session ON agent_actions (session_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions (project_id);
+`;
 
 /** Bring the database up; log success/failure clearly. Never throws. */
-export async function initDb(): Promise<boolean> {
+export function initDb(): boolean {
+  const db = getDb();
+  if (!db) {
+    console.error('[db] SQLite unavailable — DB-backed features are disabled');
+    return false;
+  }
   try {
-    const version = await checkConnection();
-    const ran = await runMigrations();
-    console.log(
-      `[db] connected: ${version?.split(',')[0]}${ran.length ? ` — applied ${ran.length} migration(s): ${ran.join(', ')}` : ' — schema up to date'}`,
-    );
+    db.exec(SCHEMA_SQL);
+    dbReady = true;
+    console.log(`[db] SQLite ready: ${DB_PATH}`);
     return true;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(
-      `[db] FAILED to connect or migrate — DB-backed features are disabled until this is fixed: ${msg}`,
-    );
-    console.error(
-      '[db] configure via DATABASE_URL or PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE (default database: aether_db)',
-    );
+    console.error(`[db] FAILED to apply schema — DB-backed features are disabled: ${msg}`);
+    dbReady = false;
     return false;
   }
 }
 
-/** Fire-and-forget guarded write: logs instead of throwing. */
-export function dbExec(sql: string, params: unknown[] = []): Promise<pg.QueryResult | null> {
-  return pool.query(sql, params).catch((err) => {
+/**
+ * Fire-and-forget guarded write: logs instead of throwing.
+ * better-sqlite3 is synchronous; we wrap to keep the async signature
+ * used by callers (dbStore.ts).
+ */
+export function dbExec(sql: string, params: unknown[] = []): Promise<{ rows: { id: number; changes: number }[] } | null> {
+  const db = getDb();
+  if (!db) return Promise.resolve(null);
+  try {
+    const stmt = db.prepare(sql);
+    const result = stmt.run(...params);
+    return Promise.resolve({
+      rows: [{ id: Number(result.lastInsertRowid), changes: result.changes }],
+    });
+  } catch (err) {
     console.error(
       `[db] write failed: ${err instanceof Error ? err.message : String(err)} — sql: ${sql.slice(0, 120)}`,
     );
-    return null;
-  });
+    return Promise.resolve(null);
+  }
 }
 
 /** Read query returning rows, or [] when the DB is unavailable. */
-export async function dbRows<T = Record<string, unknown>>(
+export function dbRows<T = Record<string, unknown>>(
   sql: string,
   params: unknown[] = [],
 ): Promise<T[]> {
+  const db = getDb();
+  if (!db) return Promise.resolve([]);
   try {
-    const r = await pool.query(sql, params);
-    return r.rows as T[];
+    const stmt = db.prepare(sql);
+    const rows = stmt.all(...params) as T[];
+    return Promise.resolve(rows);
   } catch (err) {
     console.error(
       `[db] read failed: ${err instanceof Error ? err.message : String(err)} — sql: ${sql.slice(0, 120)}`,
     );
-    return [];
+    return Promise.resolve([]);
   }
 }
 
-process.on('exit', () => void pool.end().catch(() => {}));
+/** Close the database on process exit. */
+process.on('exit', () => {
+  if (_db) {
+    try { _db.close(); } catch { /* best effort */ }
+  }
+});

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import { AlertTriangle, Trash2 } from 'lucide-react';
+import { AlertTriangle, Trash2, X } from 'lucide-react';
 
 interface ConfirmModalProps {
   open: boolean;
@@ -60,6 +60,9 @@ export function ConfirmModal({
         aria-labelledby="confirm-title"
         aria-describedby="confirm-msg"
       >
+        <button className="confirm-close" onClick={onCancel} aria-label="Close dialog" title="Close">
+          <X size={13} />
+        </button>
         <div className="confirm-icon-row">
           <span className={`confirm-icon ${danger ? 'danger' : ''}`}>
             {danger ? <Trash2 size={18} /> : <AlertTriangle size={18} />}

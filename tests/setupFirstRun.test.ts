@@ -59,9 +59,8 @@ test('complete() writes through the REAL SettingsStore and stamps the marker', a
   const r = await setup.complete({
     dataDir: home,
     omni: { baseUrl: 'http://127.0.0.1:1', apiKey: '' }, // unreachable on purpose
-    database: { mode: 'skip' },
     workspace: { defaultDir: wsDir },
-    skipped: ['omni', 'database'],
+    skipped: ['omni'],
   });
   // The gateway is unreachable → its check fails, but completion still
   // persists (partially-configured install is explicit, spec Section 2 Step 5).
@@ -70,7 +69,7 @@ test('complete() writes through the REAL SettingsStore and stamps the marker', a
   assert.ok(fs.existsSync(SETUP_FILE()), 'setup marker written');
   const marker = JSON.parse(fs.readFileSync(SETUP_FILE(), 'utf8'));
   assert.equal(marker.complete, true);
-  assert.deepEqual([...marker.skipped].sort(), ['database', 'omni']);
+  assert.deepEqual([...marker.skipped].sort(), ['omni']);
   // Settings landed in the real store and on disk with schema version.
   assert.equal(settings.settings.omni.baseUrl, 'http://127.0.0.1:1');
   const onDisk = JSON.parse(fs.readFileSync(path.join(home, 'settings.json'), 'utf8'));
@@ -81,15 +80,10 @@ test('complete() writes through the REAL SettingsStore and stamps the marker', a
   // State now reports complete.
   const st = await setup.getState();
   assert.equal(st.complete, true);
-  assert.deepEqual([...st.skipped].sort(), ['database', 'omni']);
+  assert.deepEqual([...st.skipped].sort(), ['omni']);
 });
 
-test('database check with a garbage connection string fails honestly', async () => {
-  const { setup } = fresh();
-  const r = await setup.testDatabase('postgresql://nobody:nopass@127.0.0.1:59999/void_db');
-  assert.equal(r.ok, false);
-  assert.ok(r.detail.length > 0);
-});
+
 
 test('omni check against an unreachable endpoint fails honestly', async () => {
   const { setup } = fresh();

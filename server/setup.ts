@@ -16,7 +16,6 @@ import { DATA_DIR } from './dataDir.js';
 import { OMNI_DEFAULT_BASE_URL, LOOPBACK_HOST, OMNI_PORT } from './config.js';
 import type { SettingsStore } from './settings.js';
 import type { OmniClient } from './omni.js';
-import { testConnectionString, reconfigurePool, isDbReady, checkConnection } from './db.js';
 import type { AppSettings, OmniSettings } from '../shared/types.js';
 
 const SETUP_FILE_NAME = 'setup.json';
@@ -34,7 +33,6 @@ export interface SetupState {
     omniBaseUrl: string;
     defaultProjectsDir: string;
   };
-  dbConfigured: boolean;
 }
 
 export interface StepCheck {
@@ -45,7 +43,6 @@ export interface StepCheck {
 export interface SetupPayload {
   dataDir: string;
   omni: { baseUrl: string; apiKey: string };
-  database: { mode: 'skip' | 'existing'; connectionString?: string };
   workspace: { defaultDir: string };
   skipped: string[];
 }
@@ -120,7 +117,6 @@ export class SetupManager {
         omniBaseUrl: OMNI_DEFAULT_BASE_URL,
         defaultProjectsDir: path.join(os.homedir(), 'Documents', 'Aether Projects'),
       },
-      dbConfigured: isDbReady(),
     };
   }
 
@@ -148,17 +144,7 @@ export class SetupManager {
     }
   }
 
-  /** Step 3 — real `SELECT version()` on a throwaway client (not a ping). */
-  async testDatabase(connectionString: string): Promise<StepCheck> {
-    try {
-      const version = await testConnectionString(connectionString);
-      return { ok: true, detail: version.split(',')[0] };
-    } catch (e) {
-      return { ok: false, detail: trimErr(e) };
-    }
-  }
-
-  /** Step 4 — create-if-missing + writable probe of the projects dir. */
+  /** Step 3 — create-if-missing + writable probe of the projects dir. */
   async checkWorkspaceDir(dir: string): Promise<StepCheck> {
     try {
       fs.mkdirSync(dir, { recursive: true });
@@ -190,39 +176,6 @@ export class SetupManager {
     };
     this.settingsStore.settings = { ...s, omni: nextOmni };
     this.omni.settings = nextOmni; // live client picks it up immediately
-
-    // --- Database ---
-    if (payload.database.mode === 'existing' && payload.database.connectionString) {
-      try {
-        const version = await reconfigurePool(payload.database.connectionString.trim());
-        await this.runMigrationsSafe();
-        checks.push({ item: 'Database', ok: true, detail: version.split(',')[0] });
-      } catch (e) {
-        checks.push({ item: 'Database', ok: false, detail: trimErr(e) });
-      }
-    } else if (payload.skipped.includes('database')) {
-      checks.push({
-        item: 'Database',
-        ok: false,
-        detail: 'skipped — history/usage tracking disabled',
-      });
-    } else {
-      // Default: whatever the environment already provides.
-      try {
-        const v = await checkConnection();
-        checks.push({
-          item: 'Database',
-          ok: true,
-          detail: `${v?.split(',')[0] ?? 'unavailable'} (environment default)`,
-        });
-      } catch {
-        checks.push({
-          item: 'Database',
-          ok: false,
-          detail: 'environment default unreachable — DB features disabled',
-        });
-      }
-    }
 
     // --- Omni ---
     try {
@@ -257,14 +210,6 @@ export class SetupManager {
     this.writeMarker(payload.skipped);
 
     return { ok: checks.every((c) => c.ok), checks };
-  }
-
-  private async runMigrationsSafe(): Promise<void> {
-    // Import lazily to avoid a cycle: db.ts has no dep on setup.ts, but
-    // migrations live there and the setup module must not load the pool at
-    // module-eval time in tests.
-    const { runMigrations } = await import('./db.js');
-    await runMigrations();
   }
 
   // ---------- Recovery (settings.json unreadable / newer schema) ----------
@@ -337,28 +282,17 @@ function trimErr(e: unknown): string {
 /**
  * First-run help content — real instructions the wizard surfaces inline so a
  * fresh user can actually obtain the two mandatory prerequisites:
- * an OmniRoute API key and a reachable PostgreSQL instance.
+ * first-run setup instructions for the user.
  */
 export function getSetupHelp() {
   return {
     omni: {
       steps: [
-        'Open your OmniRoute instance (default: ' + OMNI_DEFAULT_BASE_URL + ') and sign in.',
-        'Go to Settings → API keys → “Create key” (or “sk-…” page, depending on version).',
-        'Copy the key — it is shown once — and paste it into the API-key field.',
-        '“Test connection” verifies the key against GET /models with your key attached.',
+        'OmniRoute is installed automatically during setup \u2014 no manual steps required.',
+        'The gateway runs on ' + OMNI_DEFAULT_BASE_URL + ' and provides access to free models.',
+        'Optionally add your own provider API keys later in OmniRoute settings for paid models.',
       ],
       docsUrl: OMNI_DEFAULT_BASE_URL,
-    },
-    db: {
-      steps: [
-        'Windows: download the PostgreSQL installer from https://www.postgresql.org/download/windows/ and run it (keeps default port 5432).',
-        'macOS: `brew install postgresql@16 && brew services start postgresql@16`.',
-        'Linux: `sudo apt install postgresql` (Debian/Ubuntu) or `sudo dnf install postgresql-server`.',
-        'Create the app database: `createdb aether_db` (or `CREATE DATABASE aether_db;` in psql).',
-        'Connection string shape: postgresql://USER:PASSWORD@localhost:5432/aether_db',
-      ],
-      docsUrl: 'https://www.postgresql.org/docs/current/tutorial-install.html',
     },
   };
 }

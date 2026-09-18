@@ -54,9 +54,6 @@ export const PREVIEW_DEFAULT_PORT = portEnv('PREVIEW_PORT', 4173);
 export const PREVIEW_URL_BASE = 'http://localhost';
 /** Base for `new URL()` request-path parsing — never contacted over the network. */
 export const URL_PARSE_BASE = 'http://localhost';
-/** PostgreSQL defaults (credentials still come from env only — Section 3). */
-export const PG_HOST = process.env.PGHOST ?? 'localhost';
-export const PG_PORT = portEnv('PGPORT', 5432);
 
 export function ensureDataDirs(): void {
   fs.mkdirSync(DATA_DIR, { recursive: true });

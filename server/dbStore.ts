@@ -44,7 +44,7 @@ export function estimateCost(model: string, inputTokens: number, outputTokens: n
 
 export async function getProjectId(rootPath: string): Promise<number | null> {
   if (!isDbReady()) return null;
-  const rows = await dbRows<{ id: number }>('SELECT id FROM projects WHERE root_path = $1', [
+  const rows = await dbRows<{ id: number }>('SELECT id FROM projects WHERE root_path = ?', [
     rootPath,
   ]);
   return rows[0]?.id ?? null;
@@ -53,8 +53,8 @@ export async function getProjectId(rootPath: string): Promise<number | null> {
 export async function upsertProject(name: string, rootPath: string, language?: string) {
   if (!isDbReady()) return null;
   const r = await dbExec(
-    `INSERT INTO projects (name, root_path, language) VALUES ($1, $2, $3)
-     ON CONFLICT (root_path) DO UPDATE SET name = EXCLUDED.name, language = EXCLUDED.language, updated_at = NOW()
+    `INSERT INTO projects (name, root_path, language) VALUES (?, ?, ?)
+     ON CONFLICT (root_path) DO UPDATE SET name = excluded.name, language = excluded.language, updated_at = datetime('now')
      RETURNING id`,
     [name, rootPath, language ?? null],
   );
@@ -70,8 +70,8 @@ export async function upsertFile(
 ) {
   if (!isDbReady() || !projectId) return null;
   const r = await dbExec(
-    `INSERT INTO files (project_id, path, content, last_modified) VALUES ($1, $2, $3, NOW())
-     ON CONFLICT (project_id, path) DO UPDATE SET content = EXCLUDED.content, last_modified = NOW()
+    `INSERT INTO files (project_id, path, content, last_modified) VALUES (?, ?, ?, datetime('now'))
+     ON CONFLICT (project_id, path) DO UPDATE SET content = excluded.content, last_modified = datetime('now')
      RETURNING id`,
     [projectId, relPath, content],
   );
@@ -81,7 +81,7 @@ export async function upsertFile(
 export async function getFileId(projectId: number, relPath: string): Promise<number | null> {
   if (!isDbReady()) return null;
   const rows = await dbRows<{ id: number }>(
-    'SELECT id FROM files WHERE project_id = $1 AND path = $2',
+    'SELECT id FROM files WHERE project_id = ? AND path = ?',
     [projectId, relPath],
   );
   return rows[0]?.id ?? null;
@@ -91,7 +91,7 @@ export async function getFileId(projectId: number, relPath: string): Promise<num
 
 export async function startSession(projectId: number | null): Promise<number | null> {
   if (!isDbReady()) return null;
-  const r = await dbExec('INSERT INTO sessions (project_id, status) VALUES ($1, $2) RETURNING id', [
+  const r = await dbExec('INSERT INTO sessions (project_id, status) VALUES (?, ?) RETURNING id', [
     projectId,
     'active',
   ]);
@@ -103,9 +103,9 @@ export async function endSession(
   status: 'completed' | 'failed' | 'cancelled',
 ) {
   if (!isDbReady() || !sessionId) return;
-  await dbExec(`UPDATE sessions SET ended_at = NOW(), status = $2 WHERE id = $1`, [
-    sessionId,
+  await dbExec(`UPDATE sessions SET ended_at = datetime('now'), status = ? WHERE id = ?`, [
     status,
+    sessionId,
   ]);
 }
 
@@ -127,7 +127,7 @@ export async function recordAgentAction(input: ActionInput): Promise<number | nu
     fileId = await getFileId(input.projectId, input.filePath);
   }
   const r = await dbExec(
-    'INSERT INTO agent_actions (session_id, action_type, file_id, prompt, result) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+    'INSERT INTO agent_actions (session_id, action_type, file_id, prompt, result) VALUES (?, ?, ?, ?, ?) RETURNING id',
     [input.sessionId, input.actionType, fileId, input.prompt ?? null, input.result ?? null],
   );
   return r?.rows[0]?.id ?? null;
@@ -147,7 +147,7 @@ export async function recordModelUsage(u: {
   const cost = estimateCost(u.modelName, u.inputTokens, u.outputTokens);
   await dbExec(
     `INSERT INTO model_usage (session_id, action_id, model_name, input_tokens, output_tokens, latency_ms, cost_usd)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [u.sessionId, u.actionId, u.modelName, u.inputTokens, u.outputTokens, u.latencyMs, cost],
   );
 }
@@ -195,7 +195,7 @@ export async function recordGitCommit(opts: {
   );
   await dbExec(
     `INSERT INTO git_commits (project_id, action_id, commit_hash, branch, message, diff_summary, files_changed, additions, deletions)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (commit_hash) DO NOTHING`,
     [
       opts.projectId,
@@ -219,9 +219,9 @@ export async function recordGitCommit(opts: {
 export async function linkLatestCommitToAction(projectId: number | null, actionId: number | null) {
   if (!isDbReady() || !projectId || !actionId) return;
   await dbExec(
-    `UPDATE git_commits SET action_id = $2
-     WHERE id = (SELECT id FROM git_commits WHERE project_id = $1 AND action_id IS NULL ORDER BY committed_at DESC LIMIT 1)`,
-    [projectId, actionId],
+    `UPDATE git_commits SET action_id = ?
+     WHERE id = (SELECT id FROM git_commits WHERE project_id = ? AND action_id IS NULL ORDER BY committed_at DESC LIMIT 1)`,
+    [actionId, projectId],
   );
 }
 
@@ -229,14 +229,14 @@ export async function linkLatestCommitToAction(projectId: number | null, actionI
 
 export async function getProjectHistory(limit = 50) {
   return dbRows(
-    `SELECT id, name, root_path, language, created_at, updated_at FROM projects ORDER BY updated_at DESC LIMIT $1`,
+    `SELECT id, name, root_path, language, created_at, updated_at FROM projects ORDER BY updated_at DESC LIMIT ?`,
     [limit],
   );
 }
 
 export async function getFileHistory(projectId: number, limit = 100) {
   return dbRows(
-    `SELECT id, path, last_modified, LENGTH(content) AS content_bytes FROM files WHERE project_id = $1 ORDER BY last_modified DESC LIMIT $2`,
+    `SELECT id, path, last_modified, LENGTH(content) AS content_bytes FROM files WHERE project_id = ? ORDER BY last_modified DESC LIMIT ?`,
     [projectId, limit],
   );
 }
@@ -245,7 +245,7 @@ export async function getAgentActions(sessionId: number, limit = 200) {
   return dbRows(
     `SELECT a.id, a.action_type, a.prompt, a.result, a.created_at, f.path AS file_path
      FROM agent_actions a LEFT JOIN files f ON f.id = a.file_id
-     WHERE a.session_id = $1 ORDER BY a.created_at ASC LIMIT $2`,
+     WHERE a.session_id = ? ORDER BY a.created_at ASC LIMIT ?`,
     [sessionId, limit],
   );
 }
@@ -254,7 +254,7 @@ export async function getSessions(projectId: number, limit = 50) {
   return dbRows(
     `SELECT id, started_at, ended_at, status,
             (SELECT COUNT(*) FROM agent_actions a WHERE a.session_id = s.id) AS action_count
-     FROM sessions s WHERE project_id = $1 ORDER BY started_at DESC LIMIT $2`,
+     FROM sessions s WHERE project_id = ? ORDER BY started_at DESC LIMIT ?`,
     [projectId, limit],
   );
 }
@@ -268,7 +268,7 @@ export async function getUsageBySession(projectId: number) {
             COALESCE(SUM(mu.cost_usd), 0) AS cost_usd,
             COALESCE(AVG(mu.latency_ms), 0) AS avg_latency_ms
      FROM sessions s LEFT JOIN model_usage mu ON mu.session_id = s.id
-     WHERE s.project_id = $1
+     WHERE s.project_id = ?
      GROUP BY s.id ORDER BY s.started_at DESC`,
     [projectId],
   );
@@ -281,7 +281,7 @@ export async function getUsageByModel(projectId?: number) {
       `SELECT mu.model_name, SUM(mu.input_tokens) AS input_tokens, SUM(mu.output_tokens) AS output_tokens,
               SUM(mu.cost_usd) AS cost_usd, COUNT(*) AS calls, COALESCE(AVG(mu.latency_ms), 0) AS avg_latency_ms
        FROM model_usage mu JOIN sessions s ON s.id = mu.session_id
-       WHERE s.project_id = $1 GROUP BY mu.model_name ORDER BY SUM(mu.cost_usd) DESC`,
+       WHERE s.project_id = ? GROUP BY mu.model_name ORDER BY SUM(mu.cost_usd) DESC`,
       [projectId],
     );
   }
@@ -305,8 +305,8 @@ export async function getCommitTimeline(projectId: number, limit = 100) {
      FROM git_commits g
      LEFT JOIN agent_actions a ON a.id = g.action_id
      LEFT JOIN sessions s ON s.id = a.session_id
-     WHERE g.project_id = $1
-     ORDER BY g.committed_at DESC LIMIT $2`,
+     WHERE g.project_id = ?
+     ORDER BY g.committed_at DESC LIMIT ?`,
     [projectId, limit],
   );
 }

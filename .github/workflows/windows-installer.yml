@@ -81,12 +81,37 @@ jobs:
       - name: Independently re-hash the installer
         shell: pwsh
         run: |
-          $exe = Get-ChildItem release -Filter 'Aether-Setup-*.exe' | Select-Object -First 1
+          $exe = Get-ChildItem release -Filter 'Aether-Setup-*.exe' |
+            Where-Object { $_.Name -ne 'Aether-Setup-latest.exe' } | Select-Object -First 1
           $recorded = (Get-Content "$($exe.FullName).sha256").Split(' ')[0]
           $actual = (Get-FileHash -Algorithm SHA256 $exe.FullName).Hash.ToLower()
           Write-Host "recorded: $recorded"
           Write-Host "actual:   $actual"
           if ($recorded -ne $actual) { Write-Error 'SHA-256 mismatch between .sha256 record and Get-FileHash'; exit 1 }
+
+      # The website's download button is a static URL pointing at
+      # .../releases/latest/download/Aether-Setup-latest.exe — a fixed filename
+      # that must exist in every release. Verify the versioned installer and
+      # its latest-named copy are byte-identical (same size, same hash) before
+      # anything ships.
+      - name: Verify Aether-Setup-latest.exe copy matches the versioned installer
+        shell: pwsh
+        run: |
+          $versioned = Get-ChildItem release -Filter 'Aether-Setup-*.exe' |
+            Where-Object { $_.Name -ne 'Aether-Setup-latest.exe' } | Select-Object -First 1
+          $latest = Get-ChildItem release -Filter 'Aether-Setup-latest.exe'
+          if (-not $latest) { Write-Error 'Aether-Setup-latest.exe not produced by build-windows-installer.mjs'; exit 1 }
+          if ($versioned.Length -ne $latest.Length) { Write-Error 'size mismatch between versioned installer and latest copy'; exit 1 }
+          $hashVersioned = (Get-FileHash -Algorithm SHA256 $versioned.FullName).Hash.ToLower()
+          $hashLatest = (Get-FileHash -Algorithm SHA256 $latest.FullName).Hash.ToLower()
+          Write-Host "versioned ($($versioned.Name)): $hashVersioned"
+          Write-Host "latest   (Aether-Setup-latest.exe): $hashLatest"
+          if ($hashVersioned -ne $hashLatest) { Write-Error 'SHA-256 mismatch between versioned installer and latest copy'; exit 1 }
+          $sumLatest = Get-ChildItem release -Filter 'Aether-Setup-latest.exe.sha256'
+          if (-not $sumLatest) { Write-Error 'Aether-Setup-latest.exe.sha256 not generated'; exit 1 }
+          $recordedLatest = (Get-Content $sumLatest.FullName).Split(' ')[0]
+          if ($recordedLatest -ne $hashLatest) { Write-Error 'Aether-Setup-latest.exe.sha256 does not match the latest copy'; exit 1 }
+          Write-Host 'OK: latest-named copy is byte-identical to the versioned installer and its checksum matches.'
 
       - name: Smoke test the packaged build
         run: node scripts/smoke-packaged.mjs

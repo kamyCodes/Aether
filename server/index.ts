@@ -1,5 +1,6 @@
 import express from 'express';
 import http from 'node:http';
+import { execSync, type ChildProcess } from 'node:child_process';
 import { WebSocketServer, WebSocket } from 'ws';
 import multer from 'multer';
 import path from 'node:path';
@@ -33,6 +34,7 @@ import { DATA_DIR } from './dataDir.js';
 import { PORT, HOST, OMNI_PORT, OMNI_DEFAULT_BASE_URL, LOOPBACK_HOST } from './config.js';
 import { bus, emitFsChange } from './bus.js';
 import { initDb, isDbReady } from './db.js';
+import { spawnOmniRoute, killOmniRoute, waitForOmniReady } from './omniLifecycle.js';
 import * as store from './dbStore.js';
 import { dbRows } from './db.js';
 import { maskKey, resolveApiKey } from './omni.js';
@@ -111,10 +113,102 @@ try {
   console.warn('[skills] skill-pack import skipped:', e instanceof Error ? e.message : e);
 }
 
-// ---------- Database (PostgreSQL) ----------
-// Brings up the pool, checks the connection, applies idempotent migrations.
+// ---------- Database (SQLite) ----------
+// Opens ~/.aether/aether.db, applies idempotent schema.
 // Never throws — if the DB is down the app runs with DB features disabled.
-await initDb();
+initDb();
+
+// ---------- OmniRoute lifecycle ----------
+// If settings already have a valid key + base URL, skip setup.
+// Otherwise run setup-omniroute (install + configure) automatically.
+// Then spawn the server, poll until ready, and kill on shutdown.
+const omniKey = settings.settings.omni.apiKey || resolveApiKey();
+if (!omniKey || !settings.settings.omni.baseUrl) {
+  console.log('[omni] no API key or base URL configured — running automated setup...');
+  const { runSetup } = await import('../scripts/setup-omniroute.js');
+  const result = await runSetup();
+  if (result.ok && result.apiKey) {
+    settings.settings.omni.apiKey = result.apiKey;
+    settings.settings.omni.baseUrl = result.baseUrl ?? OMNI_DEFAULT_BASE_URL;
+    omni.settings = settings.settings.omni;
+    settings.save();
+    console.log('[omni] setup complete — API key saved to settings.json');
+  } else {
+    console.error('[omni] setup failed:', result.error ?? 'unknown error');
+  }
+}
+// Spawn OmniRoute server as a child process (dies with this process).
+// If port 20128 is already in use (e.g. orphaned from a previous crash),
+// kill the blocker and retry once before giving up.
+function killPortHolder(port: number): void {
+  try {
+    if (process.platform === 'win32') {
+      // netstat -ano | findstr :<port> | findstr LISTENING → extract PID → taskkill
+      const out = execSync(`netstat -ano | findstr ":${port}" | findstr LISTENING`, {
+        encoding: 'utf8',
+        timeout: 5_000,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      const pids = [...new Set(out.split(/\r?\n/).map((l) => l.trim().split(/\s+/).pop()).filter(Boolean))] as string[];
+      for (const pid of pids) {
+        try { execSync(`taskkill /F /PID ${pid}`, { stdio: 'pipe', timeout: 5_000 }); } catch { /* already dead */ }
+      }
+    } else {
+      // lsof -ti:<port> → PIDs → kill -9
+      const out = execSync(`lsof -ti:${port}`, {
+        encoding: 'utf8',
+        timeout: 5_000,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      const pids = out.split(/\r?\n/).filter(Boolean);
+      for (const pid of pids) {
+        try { execSync(`kill -9 ${pid}`, { stdio: 'pipe', timeout: 5_000 }); } catch { /* already dead */ }
+      }
+    }
+  } catch {
+    // No process found or command failed — port might already be free
+  }
+}
+
+let omniProcess: ChildProcess | null = null;
+try {
+  omniProcess = await spawnOmniRoute();
+  await waitForOmniReady(omni.settings.apiKey || resolveApiKey());
+  console.log('[omni] gateway ready');
+} catch (err) {
+  const msg = err instanceof Error ? err.message : String(err);
+  const portConflict = /EADDRINUSE/i.test(msg) || /port.*(?:${OMNI_PORT}|20128).*in use/i.test(msg);
+  if (portConflict) {
+    console.warn(`[omni] port ${OMNI_PORT} in use — killing blocker and retrying...`);
+    if (omniProcess) killOmniRoute(omniProcess);
+    omniProcess = null;
+    killPortHolder(OMNI_PORT);
+    await new Promise((r) => setTimeout(r, 2_000));
+    try {
+      omniProcess = await spawnOmniRoute();
+      await waitForOmniReady(omni.settings.apiKey || resolveApiKey());
+      console.log('[omni] gateway ready (after port-conflict retry)');
+    } catch (retryErr) {
+      const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+      console.error(`[omni] FAILED: OmniRoute couldn't start because port ${OMNI_PORT} is already in use. Please restart Aether. If this keeps happening, check for another OmniRoute process running and close it manually.`);
+      console.error(`[omni] AI features disabled — ${retryMsg}`);
+    }
+  } else {
+    console.error(
+      `[omni] FAILED to start OmniRoute: ${msg} — AI features disabled`,
+    );
+  }
+}
+// Kill OmniRoute on shutdown
+const shutdownOmni = (): void => {
+  if (omniProcess) {
+    killOmniRoute(omniProcess);
+    omniProcess = null;
+  }
+};
+process.on('SIGINT', () => { shutdownOmni(); process.exit(0); });
+process.on('SIGTERM', () => { shutdownOmni(); process.exit(0); });
+process.on('exit', shutdownOmni);
 
 // ---------- OmniRoute health check ----------
 // Pings /v1/models at startup to confirm reachability + auth. Missing API key
@@ -172,13 +266,6 @@ api.post('/setup/check/omni', async (req, res) => {
   const { baseUrl, apiKey } = (req.body ?? {}) as { baseUrl?: string; apiKey?: string };
   res.json(await setup.testOmni(String(baseUrl ?? ''), String(apiKey ?? '')));
 });
-api.post('/setup/check/database', async (req, res) =>
-  res.json(
-    await setup.testDatabase(
-      String((req.body as { connectionString?: string }).connectionString ?? ''),
-    ),
-  ),
-);
 api.post('/setup/check/workspacedir', async (req, res) =>
   res.json(await setup.checkWorkspaceDir(String((req.body as { dir?: string }).dir ?? ''))),
 );
