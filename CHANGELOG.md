@@ -2,6 +2,12 @@
 
 All notable changes to Aether are documented here. Each installer build adds an entry for its version; edit freely — re-running the build never overwrites an existing entry.
 
+## [0.1.3] — 2026-09-18
+
+### Critical fix
+
+- **Native module crash on startup.** `better-sqlite3` was compiled for system Node.js but the packaged app runs under Electron's bundled Node.js (different ABI). Added `@electron/rebuild` to the build pipeline so native modules are compiled against Electron's headers. Also made the `better-sqlite3` import graceful — if the native module still fails to load, the app runs with DB features disabled instead of crashing.
+
 ## [0.1.2] — 2026-09-18
 
 ### Zero-config first run

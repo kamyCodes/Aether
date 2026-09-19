@@ -2,7 +2,19 @@
  * SQLite database bootstrap and schema management. Owns migrations (the
  * `migrations/` folder) and exposes the raw `dbRows` helper used by dbStore.
  */
-import Database from 'better-sqlite3';
+import type BetterSqlite3 from 'better-sqlite3';
+
+let BetterSqlite3Ctor: typeof BetterSqlite3 | null = null;
+try {
+  BetterSqlite3Ctor = (await import('better-sqlite3')).default;
+} catch (err) {
+  // Native module failed to load (e.g. ABI mismatch in packaged Electron build).
+  // DB features will be disabled but the app stays alive.
+  console.error(
+    `[db] better-sqlite3 native module failed to load: ${err instanceof Error ? err.message : String(err)} — DB features disabled`,
+  );
+}
+
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,14 +32,15 @@ export function projectRoot(): string {
 // ---------- SQLite bootstrap ----------
 
 const DB_PATH = path.join(DATA_DIR, 'aether.db');
-let _db: Database.Database | null = null;
+let _db: BetterSqlite3.Database | null = null;
 
 /** Get or open the SQLite database. Never throws on first call — returns null if unavailable. */
-function getDb(): Database.Database | null {
+function getDb(): BetterSqlite3.Database | null {
   if (_db) return _db;
+  if (!BetterSqlite3Ctor) return null; // native module failed to load
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
-    _db = new Database(DB_PATH);
+    _db = new BetterSqlite3Ctor(DB_PATH);
     _db.pragma('journal_mode = WAL');
     _db.pragma('busy_timeout = 5000');
     _db.pragma('synchronous = NORMAL');
